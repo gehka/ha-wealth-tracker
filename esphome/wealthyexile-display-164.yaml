@@ -84,9 +84,14 @@ external_components:
     components: [ft3168]
 
 substitutions:
-  # Placeholders -- replace with the real entity IDs from your HA instance
-  # (Developer Tools > States, filter by "wealthyexile") once the
-  # integration is set up.
+  # Confirmed against a real, live installation (Developer Tools > States).
+  # Entity IDs are assigned once at entity creation and stay stable even
+  # after a display-name change, which is why these still carry German
+  # words even though the integration's UI now shows English names -- the
+  # entities here predate that rename. A *fresh* install (e.g. setting
+  # this up for someone else via HACS from scratch) will get English
+  # entity IDs instead (sensor.wealthyexile_loot_tracker_wealth, etc.) --
+  # recheck via Developer Tools > States before flashing for a new account.
   total_value_entity: sensor.wealthyexile_loot_tracker_gesamtwert
   divines_per_hour_entity: sensor.wealthyexile_loot_tracker_divines_pro_stunde
   divine_price_entity: sensor.wealthyexile_loot_tracker_divine_preis
