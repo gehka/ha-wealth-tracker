@@ -84,31 +84,31 @@ external_components:
     components: [ft3168]
 
 substitutions:
-  # Confirmed against a real, live installation (Developer Tools > States).
-  # Entity IDs are assigned once at entity creation and stay stable even
-  # after a display-name change, which is why these still carry German
-  # words even though the integration's UI now shows English names -- the
-  # entities here predate that rename. A *fresh* install (e.g. setting
-  # this up for someone else via HACS from scratch) will get English
-  # entity IDs instead (sensor.wealthyexile_loot_tracker_wealth, etc.) --
-  # recheck via Developer Tools > States before flashing for a new account.
-  total_value_entity: sensor.wealthyexile_loot_tracker_gesamtwert
-  divines_per_hour_entity: sensor.wealthyexile_loot_tracker_divines_pro_stunde
-  divine_price_entity: sensor.wealthyexile_loot_tracker_divine_preis
-  session_gain_entity: sensor.wealthyexile_loot_tracker_gewinn_diese_sitzung
-  top_item_1_entity: sensor.wealthyexile_loot_tracker_top_stack_1
-  top_item_2_entity: sensor.wealthyexile_loot_tracker_top_stack_2
-  top_item_3_entity: sensor.wealthyexile_loot_tracker_top_stack_3
-  top_item_4_entity: sensor.wealthyexile_loot_tracker_top_stack_4
-  top_item_5_entity: sensor.wealthyexile_loot_tracker_top_stack_5
-  top_item_6_entity: sensor.wealthyexile_loot_tracker_top_stack_6
-  top_item_7_entity: sensor.wealthyexile_loot_tracker_top_stack_7
-  top_item_8_entity: sensor.wealthyexile_loot_tracker_top_stack_8
+  # EDIT THESE before flashing for any given account/HA instance -- they
+  # are per-installation and WILL be wrong for anyone else's setup,
+  # including a fresh install of this same integration for a different
+  # person. Find the real values under Developer Tools > States (filter by
+  # "wealthyexile") after setting up the HA integration; entity IDs are
+  # assigned once at entity creation and won't match this file's naming
+  # convention automatically (e.g. a fresh HACS install gets English-slug
+  # IDs like sensor.wealthyexile_loot_tracker_wealth, not these).
+  total_value_entity: sensor.CHANGE_ME_total_value
+  divines_per_hour_entity: sensor.CHANGE_ME_divines_per_hour
+  divine_price_entity: sensor.CHANGE_ME_divine_price
+  session_gain_entity: sensor.CHANGE_ME_session_gain
+  top_item_1_entity: sensor.CHANGE_ME_top_item_1
+  top_item_2_entity: sensor.CHANGE_ME_top_item_2
+  top_item_3_entity: sensor.CHANGE_ME_top_item_3
+  top_item_4_entity: sensor.CHANGE_ME_top_item_4
+  top_item_5_entity: sensor.CHANGE_ME_top_item_5
+  top_item_6_entity: sensor.CHANGE_ME_top_item_6
+  top_item_7_entity: sensor.CHANGE_ME_top_item_7
+  top_item_8_entity: sensor.CHANGE_ME_top_item_8
   # Any entity backed by the wealthyexile coordinator works here -- HA's
   # CoordinatorEntity treats a per-entity update_entity call as a request
   # to refresh the whole shared coordinator, so this doubles as "refresh
   # everything now".
-  refresh_target_entity: sensor.wealthyexile_loot_tracker_gesamtwert
+  refresh_target_entity: sensor.CHANGE_ME_total_value
   swipe_threshold_px: "40"
 
 i2c:
