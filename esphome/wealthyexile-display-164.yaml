@@ -84,31 +84,39 @@ external_components:
     components: [ft3168]
 
 substitutions:
-  # EDIT THESE before flashing for any given account/HA instance -- they
-  # are per-installation and WILL be wrong for anyone else's setup,
-  # including a fresh install of this same integration for a different
-  # person. Find the real values under Developer Tools > States (filter by
-  # "wealthyexile") after setting up the HA integration; entity IDs are
-  # assigned once at entity creation and won't match this file's naming
-  # convention automatically (e.g. a fresh HACS install gets English-slug
-  # IDs like sensor.wealthyexile_loot_tracker_wealth, not these).
-  total_value_entity: sensor.CHANGE_ME_total_value
-  divines_per_hour_entity: sensor.CHANGE_ME_divines_per_hour
-  divine_price_entity: sensor.CHANGE_ME_divine_price
-  session_gain_entity: sensor.CHANGE_ME_session_gain
-  top_item_1_entity: sensor.CHANGE_ME_top_item_1
-  top_item_2_entity: sensor.CHANGE_ME_top_item_2
-  top_item_3_entity: sensor.CHANGE_ME_top_item_3
-  top_item_4_entity: sensor.CHANGE_ME_top_item_4
-  top_item_5_entity: sensor.CHANGE_ME_top_item_5
-  top_item_6_entity: sensor.CHANGE_ME_top_item_6
-  top_item_7_entity: sensor.CHANGE_ME_top_item_7
-  top_item_8_entity: sensor.CHANGE_ME_top_item_8
+  # These are fixed, predictable entity IDs: the wealthyexile integration
+  # pins them via `suggested_object_id` (see custom_components/wealthyexile/
+  # sensor.py) specifically so they're the same on *any* installation of
+  # it, not derived from a random per-install config entry ID or device
+  # name. That's what makes it possible to bake entity IDs into this
+  # firmware at compile time, before the person who'll actually use it has
+  # set up the integration on their own HA instance -- normally you'd have
+  # to check Developer Tools > States after setup and edit these, but here
+  # they should already be correct out of the box.
+  #
+  # Only breaks if something else on that HA instance already occupies one
+  # of these object IDs (another WealthyExile config entry, or a leftover
+  # orphaned entity registry entry from a previous attempt) -- HA would
+  # then suffix a "_2" and these constants would be wrong. Worth a quick
+  # check under Developer Tools > States after first setup, once, just in
+  # case.
+  total_value_entity: sensor.wealthyexile_wealth
+  divines_per_hour_entity: sensor.wealthyexile_divines_per_hour
+  divine_price_entity: sensor.wealthyexile_divine_price
+  session_gain_entity: sensor.wealthyexile_session_gain
+  top_item_1_entity: sensor.wealthyexile_top_stack_1
+  top_item_2_entity: sensor.wealthyexile_top_stack_2
+  top_item_3_entity: sensor.wealthyexile_top_stack_3
+  top_item_4_entity: sensor.wealthyexile_top_stack_4
+  top_item_5_entity: sensor.wealthyexile_top_stack_5
+  top_item_6_entity: sensor.wealthyexile_top_stack_6
+  top_item_7_entity: sensor.wealthyexile_top_stack_7
+  top_item_8_entity: sensor.wealthyexile_top_stack_8
   # Any entity backed by the wealthyexile coordinator works here -- HA's
   # CoordinatorEntity treats a per-entity update_entity call as a request
   # to refresh the whole shared coordinator, so this doubles as "refresh
   # everything now".
-  refresh_target_entity: sensor.CHANGE_ME_total_value
+  refresh_target_entity: sensor.wealthyexile_wealth
   swipe_threshold_px: "40"
 
 i2c:

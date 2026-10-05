@@ -79,6 +79,13 @@ class TotalValueSensor(_BaseSensor):
     # strings.json has the right entity.sensor.<key>.name entries -- a
     # fixed name is simpler and guaranteed to work.
     _attr_name = "Wealth"
+    # suggested_object_id pins the entity_id to a fixed, predictable value
+    # independent of the (random, per-install) config entry ID or device
+    # name. This matters: the ESPHome firmware hardcodes entity IDs at
+    # compile time, before anyone has set up this integration on their own
+    # HA instance, so those IDs must be constant across every install of
+    # this integration, not generated from install-specific state.
+    _attr_suggested_object_id = "wealthyexile_wealth"
     _attr_native_unit_of_measurement = "divine"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:cash-multiple"
@@ -101,6 +108,7 @@ class TotalValueSensor(_BaseSensor):
 
 class DivinesPerHourSensor(_BaseSensor):
     _attr_name = "Divines per Hour"
+    _attr_suggested_object_id = "wealthyexile_divines_per_hour"
     _attr_native_unit_of_measurement = "divine/h"
     _attr_icon = "mdi:trending-up"
 
@@ -116,6 +124,7 @@ class DivinesPerHourSensor(_BaseSensor):
 
 class DivinePriceSensor(_BaseSensor):
     _attr_name = "Divine Price"
+    _attr_suggested_object_id = "wealthyexile_divine_price"
     _attr_native_unit_of_measurement = "chaos"
     _attr_icon = "mdi:scale-balance"
 
@@ -130,6 +139,7 @@ class DivinePriceSensor(_BaseSensor):
 
 class SessionGainSensor(_BaseSensor):
     _attr_name = "Session Gain"
+    _attr_suggested_object_id = "wealthyexile_session_gain"
     _attr_native_unit_of_measurement = "divine"
     _attr_icon = "mdi:chart-line"
 
@@ -144,6 +154,7 @@ class SessionGainSensor(_BaseSensor):
 
 class LastSyncedSensor(_BaseSensor):
     _attr_name = "Last Synced"
+    _attr_suggested_object_id = "wealthyexile_last_synced"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
     def __init__(self, coordinator: WealthyExileCoordinator, entry: ConfigEntry) -> None:
@@ -167,6 +178,7 @@ class TopItemSensor(_BaseSensor):
         self._index = index
         self._attr_unique_id = f"{entry.entry_id}_top_item_{index + 1}"
         self._attr_name = f"Top Stack {index + 1}"
+        self._attr_suggested_object_id = f"wealthyexile_top_stack_{index + 1}"
 
     def _item(self):
         items = self._data.top_items
