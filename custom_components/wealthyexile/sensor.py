@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .calculations import DerivedData
-from .const import DOMAIN
+from .const import DOMAIN, TAB_TYPE_ICON_URLS
 from .coordinator import WealthyExileCoordinator
 
 TOP_ITEM_COUNT = 8
@@ -168,22 +168,27 @@ class TopItemSensor(_BaseSensor):
         self._attr_unique_id = f"{entry.entry_id}_top_item_{index + 1}"
         self._attr_name = f"Top Stack {index + 1}"
 
+    def _item(self):
+        items = self._data.top_items
+        return items[self._index] if self._index < len(items) else None
+
     @property
     def native_value(self) -> float | None:
-        items = self._data.top_items
-        if self._index >= len(items):
-            return None
-        return round(items[self._index].value_divine, 2)
+        item = self._item()
+        return round(item.value_divine, 2) if item else None
+
+    @property
+    def entity_picture(self) -> str | None:
+        item = self._item()
+        return item.icon if item else None
 
     @property
     def extra_state_attributes(self) -> dict:
-        items = self._data.top_items
-        if self._index >= len(items):
+        item = self._item()
+        if not item:
             return {}
-        item = items[self._index]
         return {
             "name": item.name,
-            "icon_url": item.icon,
             "quantity": item.quantity,
             "category": item.category,
             "value_chaos": round(item.value_chaos, 2),
@@ -214,6 +219,11 @@ class TabValueSensor(_BaseSensor):
     def native_value(self) -> float | None:
         tab = self._tab()
         return round(tab.value_divine, 2) if tab else None
+
+    @property
+    def entity_picture(self) -> str | None:
+        tab = self._tab()
+        return TAB_TYPE_ICON_URLS.get(tab.tab_type) if tab else None
 
     @property
     def extra_state_attributes(self) -> dict:
