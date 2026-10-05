@@ -1,0 +1,11 @@
+{
+  "domain": "wealthyexile",
+  "name": "WealthyExile Loot Tracker",
+  "codeowners": ["@gehka"],
+  "config_flow": true,
+  "documentation": "https://github.com/gehka/ha-wealth-tracker",
+  "issue_tracker": "https://github.com/gehka/ha-wealth-tracker/issues",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "0.1.0"
+}

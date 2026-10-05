@@ -1,0 +1,29 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Mit WealthyExile verbinden",
+        "description": "Auf wealthyexile.com/stash einloggen, Browser-DevTools öffnen (Netzwerk-Tab), einen Request an `stash?primary=true` auswählen und den `cookie`-Header anschauen. Dort stehen zwei Cookies, getrennt durch `; ` – z. B. `code_verifier=d31a6d0f-...` und `session-Allflame-1=eyJhbGci...`. Trag unten beide einzeln ein: links der Name (das Wort vor dem `=`), rechts der Wert (alles danach). Wichtig: der Name des zweiten Cookies ändert sich mit jeder neuen Liga (z. B. wird aus `session-Allflame-1` irgendwann `session-<NeueLiga>-1`) – immer den aktuellen Namen eintragen, nicht den von früher.",
+        "data": {
+          "code_verifier_name": "1. Cookie – Name",
+          "code_verifier_value": "1. Cookie – Wert",
+          "session_cookie_name": "2. Cookie – Name (ändert sich pro Liga!)",
+          "session_cookie_value": "2. Cookie – Wert"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zu WealthyExile fehlgeschlagen. Internetverbindung prüfen und erneut versuchen.",
+      "parse_failed": "Antwort von WealthyExile konnte nicht gelesen werden – entweder ist das Cookie ungültig/abgelaufen, oder WealthyExile hat ihre Seite aktualisiert (next-action-Hash veraltet, siehe const.py)."
+    },
+    "abort": {
+      "already_configured": "Dieser Account ist bereits eingerichtet."
+    }
+  },
+  "issues": {
+    "stash_parse_failed": {
+      "title": "WealthyExile-Antwort konnte mehrfach hintereinander nicht gelesen werden",
+      "description": "Ein einzelner Fehlschlag ist normal (z. B. wenn gleichzeitig im Browser synct wurde) und behebt sich von selbst beim nächsten Poll – diese Meldung erscheint erst nach mehreren Fehlschlägen in Folge. Wahrscheinlichste Ursachen: dein gespeichertes Cookie ist abgelaufen (Integration neu einrichten mit frischem Cookie), oder WealthyExile hat ihre Seite aktualisiert und der fest hinterlegte `next-action`-Hash ist veraltet. In letzterem Fall: Browser-DevTools auf wealthyexile.com/stash öffnen, einen `stash?primary=true`-Request anschauen und die Header `next-action` sowie `x-deployment-id` in `const.py` aktualisieren, dann Home Assistant neu starten."
+    }
+  }
+}

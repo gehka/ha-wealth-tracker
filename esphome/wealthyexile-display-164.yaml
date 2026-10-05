@@ -1,0 +1,443 @@
+# ---------------------------------------------------------------------------
+# Waveshare ESP32-S3-Touch-AMOLED-1.64 as a PoE loot-tracker display.
+#
+# Pulls its data from the `wealthyexile` Home Assistant custom integration
+# (see ../custom_components/wealthyexile) over the native API -- this device
+# never talks to WealthyExile or the internet directly, only to HA on the
+# local network.
+#
+# Hardware wiring (from Waveshare's own reference firmware,
+# github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.64-v2,
+# Arduino/examples/06_LVGL_Test/lcd_config.h and
+# Arduino/examples/02_I2C_QMI8658/i2c_bsp.cpp):
+#   Display QSPI (CO5300): CS=GPIO46 CLK=GPIO10 D0=GPIO11 D1=GPIO12
+#                           D2=GPIO13 D3=GPIO14 RESET=GPIO21
+#   I2C (touch)           : SDA=GPIO47 SCL=GPIO48
+#   Touch (FT3168)        : address 0x38, no RST/INT lines broken out
+#
+# UNVERIFIED / needs checking against real hardware before the gift is
+# wrapped:
+#   - Waveshare's own reference code has no LCD-enable pin for this board
+#     (unlike the related 1.43" board, which needs one). If the screen
+#     stays black, check the schematic under docs.waveshare.com for one.
+#   - Touch calibration below assumes a 1:1 raw-to-pixel mapping with no
+#     axis swap/invert; this is the most common gotcha on these boards and
+#     may need adjusting once touch is live.
+#   - Substitutions below are *placeholder* entity IDs. After the
+#     `wealthyexile` HA integration is set up, check
+#     Developer Tools > States for the real entity IDs and update the
+#     substitutions block to match.
+#   - Not flashed/tested on real hardware (no device available in the dev
+#     environment this was written in) -- `esphome config` validates
+#     cleanly and a full `esphome compile` was kicked off, but display and
+#     touch behavior can only really be confirmed on the actual board.
+#
+# Deliberately left out of this v1 (see the project plan for why):
+#   - The total-value sparkline/chart: this ESPHome version's LVGL chart
+#     widget doesn't support the `lvgl.chart.series.update` action yet, so
+#     the sparkline from the original Reddit project is dropped here
+#     rather than built on a component that doesn't exist yet. Candidate
+#     to re-add once `esphome config` is retested against a newer version.
+#   - A 3rd "session" screen and the per-tab breakdown screen: the
+#     per-tab sensors are created dynamically with entity IDs that depend
+#     on your brother's actual stash tabs, so they can't be wired into a
+#     YAML that has to compile before his account exists on this install.
+#     Both are still available as normal HA sensors/attributes for
+#     dashboards -- just not laid out on-device yet.
+# ---------------------------------------------------------------------------
+
+esphome:
+  name: wealthyexile-display
+  friendly_name: PoE Loot Tracker
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    # No separate OTA password: the api encryption key above already
+    # authenticates uploaders, so a second password just costs flash/RAM.
+
+logger:
+
+external_components:
+  # FT3168 touch driver -- not in ESPHome core, pulled from a community
+  # repo for a closely related Waveshare AMOLED board. If this repo ever
+  # disappears, vendor the `components/ft3168` folder locally instead.
+  - source: github://koshg28/ESPHA
+    components: [ft3168]
+
+substitutions:
+  # Placeholders -- replace with the real entity IDs from your HA instance
+  # (Developer Tools > States, filter by "wealthyexile") once the
+  # integration is set up.
+  total_value_entity: sensor.wealthyexile_loot_tracker_gesamtwert
+  divines_per_hour_entity: sensor.wealthyexile_loot_tracker_divines_pro_stunde
+  divine_price_entity: sensor.wealthyexile_loot_tracker_divine_preis
+  session_gain_entity: sensor.wealthyexile_loot_tracker_gewinn_diese_sitzung
+  top_item_1_entity: sensor.wealthyexile_loot_tracker_top_stack_1
+  top_item_2_entity: sensor.wealthyexile_loot_tracker_top_stack_2
+  top_item_3_entity: sensor.wealthyexile_loot_tracker_top_stack_3
+  top_item_4_entity: sensor.wealthyexile_loot_tracker_top_stack_4
+  top_item_5_entity: sensor.wealthyexile_loot_tracker_top_stack_5
+  top_item_6_entity: sensor.wealthyexile_loot_tracker_top_stack_6
+  top_item_7_entity: sensor.wealthyexile_loot_tracker_top_stack_7
+  top_item_8_entity: sensor.wealthyexile_loot_tracker_top_stack_8
+  # Any entity backed by the wealthyexile coordinator works here -- HA's
+  # CoordinatorEntity treats a per-entity update_entity call as a request
+  # to refresh the whole shared coordinator, so this doubles as "refresh
+  # everything now".
+  refresh_target_entity: sensor.wealthyexile_loot_tracker_gesamtwert
+  swipe_threshold_px: "40"
+
+i2c:
+  id: bus_i2c
+  sda: GPIO47
+  scl: GPIO48
+  frequency: 400kHz
+  scan: true
+
+spi:
+  id: bus_qspi
+  type: quad
+  clk_pin: GPIO10
+  data_pins: [GPIO11, GPIO12, GPIO13, GPIO14]
+
+display:
+  - platform: mipi_spi
+    id: amoled
+    model: CO5300
+    spi_id: bus_qspi
+    cs_pin: GPIO46
+    reset_pin: GPIO21
+    dimensions:
+      width: 280
+      height: 456
+    data_rate: 40MHz
+    spi_mode: MODE0
+    color_order: rgb
+    invert_colors: false
+    brightness: 180
+    auto_clear_enabled: false
+    update_interval: never
+
+touchscreen:
+  - platform: ft3168
+    id: touch
+    i2c_id: bus_i2c
+    address: 0x38
+    display: amoled
+    calibration:
+      x_min: 0
+      x_max: 279
+      y_min: 0
+      y_max: 455
+    # Swipe distance is tracked in on_update (the only trigger that gets
+    # live touch coordinates) into a global, then acted on in on_release
+    # (which fires once with no touch data of its own).
+    on_update:
+      - lambda: |-
+          if (touches.empty()) return;
+          id(swipe_dx) = (int) touches[0].x - (int) touches[0].x_org;
+    on_release:
+      - if:
+          condition:
+            lambda: "return abs(id(swipe_dx)) >= atoi(\"${swipe_threshold_px}\");"
+          then:
+            - if:
+                condition:
+                  lambda: "return id(swipe_dx) < 0;"
+                then:
+                  - lvgl.page.next:
+                      animation: OUT_LEFT
+                      time: 200ms
+                else:
+                  - lvgl.page.previous:
+                      animation: OUT_RIGHT
+                      time: 200ms
+      - lambda: "id(swipe_dx) = 0;"
+
+globals:
+  - id: swipe_dx
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+# --- Data pulled from Home Assistant (the wealthyexile integration) --------
+
+sensor:
+  - platform: homeassistant
+    id: ha_total_value
+    entity_id: ${total_value_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_total_value
+          text: !lambda 'return str_sprintf("%.1f", x);'
+
+  - platform: homeassistant
+    id: ha_divines_per_hour
+    entity_id: ${divines_per_hour_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_divines_per_hour
+          text: !lambda 'return str_sprintf("%.2f Divine/h", x);'
+
+  - platform: homeassistant
+    id: ha_divine_price
+    entity_id: ${divine_price_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_divine_price
+          text: !lambda 'return str_sprintf("1 Divine = %.0f Chaos", x);'
+
+  - platform: homeassistant
+    id: ha_session_gain
+    entity_id: ${session_gain_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: lbl_session_gain
+          text: !lambda 'return str_sprintf("%+.1f Divine diese Sitzung", x);'
+
+  - platform: homeassistant
+    id: ha_top_item_1_value
+    entity_id: ${top_item_1_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_1_value, text: !lambda 'return str_sprintf("%.1f", x);'}
+  - platform: homeassistant
+    id: ha_top_item_2_value
+    entity_id: ${top_item_2_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_2_value, text: !lambda 'return str_sprintf("%.1f", x);'}
+  - platform: homeassistant
+    id: ha_top_item_3_value
+    entity_id: ${top_item_3_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_3_value, text: !lambda 'return str_sprintf("%.1f", x);'}
+  - platform: homeassistant
+    id: ha_top_item_4_value
+    entity_id: ${top_item_4_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_4_value, text: !lambda 'return str_sprintf("%.1f", x);'}
+  - platform: homeassistant
+    id: ha_top_item_5_value
+    entity_id: ${top_item_5_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_5_value, text: !lambda 'return str_sprintf("%.1f", x);'}
+  - platform: homeassistant
+    id: ha_top_item_6_value
+    entity_id: ${top_item_6_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_6_value, text: !lambda 'return str_sprintf("%.1f", x);'}
+  - platform: homeassistant
+    id: ha_top_item_7_value
+    entity_id: ${top_item_7_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_7_value, text: !lambda 'return str_sprintf("%.1f", x);'}
+  - platform: homeassistant
+    id: ha_top_item_8_value
+    entity_id: ${top_item_8_entity}
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_8_value, text: !lambda 'return str_sprintf("%.1f", x);'}
+
+text_sensor:
+  - platform: homeassistant
+    id: ha_top_item_1_name
+    entity_id: ${top_item_1_entity}
+    attribute: name
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_1_name, text: !lambda "return x;"}
+  - platform: homeassistant
+    id: ha_top_item_2_name
+    entity_id: ${top_item_2_entity}
+    attribute: name
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_2_name, text: !lambda "return x;"}
+  - platform: homeassistant
+    id: ha_top_item_3_name
+    entity_id: ${top_item_3_entity}
+    attribute: name
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_3_name, text: !lambda "return x;"}
+  - platform: homeassistant
+    id: ha_top_item_4_name
+    entity_id: ${top_item_4_entity}
+    attribute: name
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_4_name, text: !lambda "return x;"}
+  - platform: homeassistant
+    id: ha_top_item_5_name
+    entity_id: ${top_item_5_entity}
+    attribute: name
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_5_name, text: !lambda "return x;"}
+  - platform: homeassistant
+    id: ha_top_item_6_name
+    entity_id: ${top_item_6_entity}
+    attribute: name
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_6_name, text: !lambda "return x;"}
+  - platform: homeassistant
+    id: ha_top_item_7_name
+    entity_id: ${top_item_7_entity}
+    attribute: name
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_7_name, text: !lambda "return x;"}
+  - platform: homeassistant
+    id: ha_top_item_8_name
+    entity_id: ${top_item_8_entity}
+    attribute: name
+    internal: true
+    on_value:
+      - lvgl.label.update: {id: lbl_top_8_name, text: !lambda "return x;"}
+
+# --- Screens -----------------------------------------------------------
+
+lvgl:
+  touchscreens:
+    - touch
+  pages:
+    - id: page_total
+      bg_color: 0x000000
+      widgets:
+        - label:
+            text: "GESAMTWERT"
+            text_color: 0x888888
+            align: TOP_MID
+            y: 20
+        - label:
+            id: lbl_total_value
+            text: "--"
+            text_font: montserrat_48
+            text_color: 0xFFFFFF
+            align: TOP_MID
+            y: 50
+        - label:
+            text: "Divine"
+            text_color: 0xAAAAAA
+            align: TOP_MID
+            y: 110
+        - label:
+            id: lbl_divines_per_hour
+            text: "-- Divine/h"
+            text_color: 0x66CCFF
+            align: TOP_MID
+            y: 160
+        - label:
+            id: lbl_session_gain
+            text: "-- Divine diese Sitzung"
+            text_color: 0xAAAAAA
+            align: TOP_MID
+            y: 195
+        - label:
+            id: lbl_divine_price
+            text: "1 Divine = -- Chaos"
+            text_color: 0x666666
+            align: TOP_MID
+            y: 230
+        - button:
+            x: 220
+            y: 400
+            width: 50
+            height: 40
+            widgets:
+              - label:
+                  text: "⟳"
+            on_click:
+              - homeassistant.service:
+                  service: homeassistant.update_entity
+                  data:
+                    entity_id: ${refresh_target_entity}
+
+    - id: page_top_items
+      bg_color: 0x000000
+      widgets:
+        - label:
+            text: "TOP STACKS"
+            text_color: 0x888888
+            align: TOP_MID
+            y: 10
+        - obj:
+            x: 10
+            y: 35
+            width: 260
+            height: 400
+            pad_all: 0
+            scrollbar_mode: "OFF"
+            widgets:
+              # Eight fixed rows, one per top_item_N entity. The HA side
+              # always publishes exactly 8 (empty slots just show "--").
+              - obj:
+                  height: 48
+                  widgets:
+                    - label: {id: lbl_top_1_name, text: "--", x: 0, y: 2, width: 190}
+                    - label: {id: lbl_top_1_value, text: "--", x: 195, y: 2, text_align: RIGHT}
+              - obj:
+                  height: 48
+                  widgets:
+                    - label: {id: lbl_top_2_name, text: "--", x: 0, y: 2, width: 190}
+                    - label: {id: lbl_top_2_value, text: "--", x: 195, y: 2, text_align: RIGHT}
+              - obj:
+                  height: 48
+                  widgets:
+                    - label: {id: lbl_top_3_name, text: "--", x: 0, y: 2, width: 190}
+                    - label: {id: lbl_top_3_value, text: "--", x: 195, y: 2, text_align: RIGHT}
+              - obj:
+                  height: 48
+                  widgets:
+                    - label: {id: lbl_top_4_name, text: "--", x: 0, y: 2, width: 190}
+                    - label: {id: lbl_top_4_value, text: "--", x: 195, y: 2, text_align: RIGHT}
+              - obj:
+                  height: 48
+                  widgets:
+                    - label: {id: lbl_top_5_name, text: "--", x: 0, y: 2, width: 190}
+                    - label: {id: lbl_top_5_value, text: "--", x: 195, y: 2, text_align: RIGHT}
+              - obj:
+                  height: 48
+                  widgets:
+                    - label: {id: lbl_top_6_name, text: "--", x: 0, y: 2, width: 190}
+                    - label: {id: lbl_top_6_value, text: "--", x: 195, y: 2, text_align: RIGHT}
+              - obj:
+                  height: 48
+                  widgets:
+                    - label: {id: lbl_top_7_name, text: "--", x: 0, y: 2, width: 190}
+                    - label: {id: lbl_top_7_value, text: "--", x: 195, y: 2, text_align: RIGHT}
+              - obj:
+                  height: 48
+                  widgets:
+                    - label: {id: lbl_top_8_name, text: "--", x: 0, y: 2, width: 190}
+                    - label: {id: lbl_top_8_value, text: "--", x: 195, y: 2, text_align: RIGHT}
