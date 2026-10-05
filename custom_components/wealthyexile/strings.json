@@ -2,28 +2,28 @@
   "config": {
     "step": {
       "user": {
-        "title": "Mit WealthyExile verbinden",
-        "description": "Auf wealthyexile.com/stash einloggen, Browser-DevTools öffnen (Netzwerk-Tab), einen Request an `stash?primary=true` auswählen und den `cookie`-Header anschauen. Dort stehen zwei Cookies, getrennt durch `; ` – z. B. `code_verifier=d31a6d0f-...` und `session-Allflame-1=eyJhbGci...`. Trag unten beide einzeln ein: links der Name (das Wort vor dem `=`), rechts der Wert (alles danach). Wichtig: der Name des zweiten Cookies ändert sich mit jeder neuen Liga (z. B. wird aus `session-Allflame-1` irgendwann `session-<NeueLiga>-1`) – immer den aktuellen Namen eintragen, nicht den von früher.",
+        "title": "Connect to WealthyExile",
+        "description": "Log in at wealthyexile.com/stash, open your browser's DevTools (Network tab), pick a request to `stash?primary=true`, and look at its `cookie` header. You'll see two cookies separated by `; ` — e.g. `code_verifier=d31a6d0f-...` and `session-Allflame-1=eyJhbGci...`. Enter both separately below: the name (the word before `=`) on the left, the value (everything after) on the right. Important: the second cookie's name changes with every new PoE league (e.g. `session-Allflame-1` eventually becomes `session-<NewLeague>-1`) — always enter the current name, not an old one.",
         "data": {
-          "code_verifier_name": "1. Cookie – Name",
-          "code_verifier_value": "1. Cookie – Wert",
-          "session_cookie_name": "2. Cookie – Name (ändert sich pro Liga!)",
-          "session_cookie_value": "2. Cookie – Wert"
+          "code_verifier_name": "Cookie 1 — name",
+          "code_verifier_value": "Cookie 1 — value",
+          "session_cookie_name": "Cookie 2 — name (changes every league!)",
+          "session_cookie_value": "Cookie 2 — value"
         }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung zu WealthyExile fehlgeschlagen. Internetverbindung prüfen und erneut versuchen.",
-      "parse_failed": "Antwort von WealthyExile konnte nicht gelesen werden – entweder ist das Cookie ungültig/abgelaufen, oder WealthyExile hat ihre Seite aktualisiert (next-action-Hash veraltet, siehe const.py)."
+      "cannot_connect": "Could not reach WealthyExile. Check your internet connection and try again.",
+      "parse_failed": "Could not read WealthyExile's response — either the cookie is invalid/expired, or WealthyExile updated their site (next-action hash out of date, see const.py)."
     },
     "abort": {
-      "already_configured": "Dieser Account ist bereits eingerichtet."
+      "already_configured": "This account is already configured."
     }
   },
   "issues": {
     "stash_parse_failed": {
-      "title": "WealthyExile-Antwort konnte mehrfach hintereinander nicht gelesen werden",
-      "description": "Ein einzelner Fehlschlag ist normal (z. B. wenn gleichzeitig im Browser synct wurde) und behebt sich von selbst beim nächsten Poll – diese Meldung erscheint erst nach mehreren Fehlschlägen in Folge. Wahrscheinlichste Ursachen: dein gespeichertes Cookie ist abgelaufen (Integration neu einrichten mit frischem Cookie), oder WealthyExile hat ihre Seite aktualisiert und der fest hinterlegte `next-action`-Hash ist veraltet. In letzterem Fall: Browser-DevTools auf wealthyexile.com/stash öffnen, einen `stash?primary=true`-Request anschauen und die Header `next-action` sowie `x-deployment-id` in `const.py` aktualisieren, dann Home Assistant neu starten."
+      "title": "WealthyExile response could not be read, repeatedly",
+      "description": "A single failure is normal (e.g. if you synced in a browser at the same moment) and self-heals on the next poll — this message only appears after several consecutive failures. Most likely causes: your stored cookie has expired (set up the integration again with a fresh cookie), or WealthyExile updated their site and the hardcoded `next-action` hash is out of date. In the latter case: open your browser's DevTools on wealthyexile.com/stash, look at a `stash?primary=true` request, and update the `next-action` and `x-deployment-id` headers in `const.py`, then restart Home Assistant."
     }
   }
 }

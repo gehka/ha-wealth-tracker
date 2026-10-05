@@ -78,7 +78,7 @@ class TotalValueSensor(_BaseSensor):
     # (entities showed up as just the device name, no suffix) even though
     # strings.json has the right entity.sensor.<key>.name entries -- a
     # fixed name is simpler and guaranteed to work.
-    _attr_name = "Gesamtwert"
+    _attr_name = "Wealth"
     _attr_native_unit_of_measurement = "divine"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:cash-multiple"
@@ -100,7 +100,7 @@ class TotalValueSensor(_BaseSensor):
 
 
 class DivinesPerHourSensor(_BaseSensor):
-    _attr_name = "Divines pro Stunde"
+    _attr_name = "Divines per Hour"
     _attr_native_unit_of_measurement = "divine/h"
     _attr_icon = "mdi:trending-up"
 
@@ -115,7 +115,7 @@ class DivinesPerHourSensor(_BaseSensor):
 
 
 class DivinePriceSensor(_BaseSensor):
-    _attr_name = "Divine-Preis"
+    _attr_name = "Divine Price"
     _attr_native_unit_of_measurement = "chaos"
     _attr_icon = "mdi:scale-balance"
 
@@ -129,7 +129,7 @@ class DivinePriceSensor(_BaseSensor):
 
 
 class SessionGainSensor(_BaseSensor):
-    _attr_name = "Gewinn diese Sitzung"
+    _attr_name = "Session Gain"
     _attr_native_unit_of_measurement = "divine"
     _attr_icon = "mdi:chart-line"
 
@@ -143,7 +143,7 @@ class SessionGainSensor(_BaseSensor):
 
 
 class LastSyncedSensor(_BaseSensor):
-    _attr_name = "Zuletzt synchronisiert"
+    _attr_name = "Last Synced"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
     def __init__(self, coordinator: WealthyExileCoordinator, entry: ConfigEntry) -> None:
@@ -166,7 +166,7 @@ class TopItemSensor(_BaseSensor):
         super().__init__(coordinator, entry)
         self._index = index
         self._attr_unique_id = f"{entry.entry_id}_top_item_{index + 1}"
-        self._attr_name = f"Top-Stack {index + 1}"
+        self._attr_name = f"Top Stack {index + 1}"
 
     @property
     def native_value(self) -> float | None:
