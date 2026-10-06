@@ -84,29 +84,17 @@ def _parse_timestamp(value: str | None) -> datetime | None:
     return datetime.fromisoformat(stripped.replace("Z", "+00:00"))
 
 
-def _latest_complete_snapshot(snapshots: list[dict]) -> dict | None:
-    """Most recent snapshot with an already-computed (non-zero) value.
-
-    WealthyExile's newest snapshot can briefly show value=0 while its
-    valuation is still being computed server-side, so we skip those.
-    """
-    ordered = sorted(
-        snapshots,
-        key=lambda s: _parse_timestamp(s.get("createdAt")) or datetime.min,
-        reverse=True,
-    )
-    for snap in ordered:
-        if snap.get("value"):
-            return snap
-    return None
-
-
 def _total_value_chaos(user: dict) -> float:
-    latest = _latest_complete_snapshot(user.get("snapshots", []))
-    if latest is not None:
-        return float(latest["value"])
+    """Current total stash value: sum of each tab's latest tabValues entry.
 
-    # Fallback: sum each tab's most recent tabValues entry.
+    This is what WealthyExile's own "Wealth" figure on wealthyexile.com
+    shows -- the live total across all synced tabs right now. The
+    `snapshots` list is a separate, independent history feed (used below
+    for the divines/hour rate) that can be sparse, stale, or contain
+    manually-created test entries completely disconnected from the
+    tabs' real current value; summing tabs directly avoids ever showing
+    a number that doesn't match what's on the website.
+    """
     total = 0.0
     for tab in user.get("tabs", []):
         tab_values = tab.get("tabValues", [])

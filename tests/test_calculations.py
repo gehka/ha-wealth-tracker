@@ -22,12 +22,14 @@ def test_divine_price_selected_for_correct_league():
     assert derived.divine_price_chaos == 370.8
 
 
-def test_total_value_uses_latest_nonzero_snapshot():
+def test_total_value_sums_latest_tab_values():
     derived = compute_derived(_payload())
-    # Fixture's newest snapshot has value=0 (still being computed server-side);
-    # the next one down (79224.87...) should be used instead.
-    assert derived.total_value_chaos == 79224.87558605643
-    assert derived.total_value_divine == 79224.87558605643 / 370.8
+    # Sum of each tab's latest tabValues entry (49472 + 39472), matching
+    # what WealthyExile's own "Wealth" figure shows -- not the separate,
+    # independently-tracked `snapshots` history (which can be stale or
+    # contain manually-created test entries disconnected from the tabs).
+    assert derived.total_value_chaos == 88944.0
+    assert derived.total_value_divine == 88944.0 / 370.8
 
 
 def test_top_items_sorted_by_value_descending():
