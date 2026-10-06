@@ -35,17 +35,24 @@
 #     touch behavior can only really be confirmed on the actual board.
 #
 # Deliberately left out of this v1 (see the project plan for why):
-#   - The total-value sparkline/chart: this ESPHome version's LVGL chart
-#     widget doesn't support the `lvgl.chart.series.update` action yet, so
-#     the sparkline from the original Reddit project is dropped here
-#     rather than built on a component that doesn't exist yet. Candidate
-#     to re-add once `esphome config` is retested against a newer version.
-#   - A 3rd "session" screen and the per-tab breakdown screen: the
-#     per-tab sensors are created dynamically with entity IDs that depend
-#     on your brother's actual stash tabs, so they can't be wired into a
-#     YAML that has to compile before his account exists on this install.
-#     Both are still available as normal HA sensors/attributes for
-#     dashboards -- just not laid out on-device yet.
+#   - The total-value sparkline/chart from the original Reddit project:
+#     dropped by choice, not just technical limitation -- the owner decided
+#     a stack of single-purpose, swipeable pages (one number each) reads
+#     better on a small screen than a crammed chart+numbers combo.
+#   - The per-tab breakdown screen: those sensors are created dynamically
+#     with entity IDs that depend on your brother's actual stash tabs, so
+#     they can't be wired into a YAML that has to compile before his
+#     account exists on this install. Still available as normal HA
+#     sensors/attributes for dashboards -- just not laid out on-device yet.
+#   - The "Top Stacks" page: dropped by choice, same reasoning as the
+#     chart above (owner wants fewer, more focused pages).
+#
+# Screen layout: four single-purpose pages, swipe left/right to move
+# between them -- Rate, Wealth, Session, Ratio. Rate and Session turn
+# green/+ when positive and red/- when negative. The Divine Orb's own
+# icon (pulled from the same CDN WealthyExile itself serves it from --
+# see the `image:` block below) stands in for the word "Divine"
+# wherever a unit label would otherwise just repeat it.
 # ---------------------------------------------------------------------------
 
 esphome:
@@ -106,14 +113,6 @@ substitutions:
   divines_per_hour_entity: sensor.wealthyexile_divines_per_hour
   divine_price_entity: sensor.wealthyexile_divine_price
   session_gain_entity: sensor.wealthyexile_session_gain
-  top_item_1_entity: sensor.wealthyexile_top_stack_1
-  top_item_2_entity: sensor.wealthyexile_top_stack_2
-  top_item_3_entity: sensor.wealthyexile_top_stack_3
-  top_item_4_entity: sensor.wealthyexile_top_stack_4
-  top_item_5_entity: sensor.wealthyexile_top_stack_5
-  top_item_6_entity: sensor.wealthyexile_top_stack_6
-  top_item_7_entity: sensor.wealthyexile_top_stack_7
-  top_item_8_entity: sensor.wealthyexile_top_stack_8
   # Any entity backed by the wealthyexile coordinator works here -- HA's
   # CoordinatorEntity treats a per-entity update_entity call as a request
   # to refresh the whole shared coordinator, so this doubles as "refresh
@@ -157,6 +156,33 @@ display:
     auto_clear_enabled: false
     update_interval: never
 
+image:
+  # Divine and Chaos Orb's actual in-game icons, fetched once at build
+  # time from GGG's own CDN (the Divine path matches what WealthyExile
+  # itself serves as the wealthyexile_top_stack_1 entity_picture while
+  # that slot held a Divine Orb stack). Two sizes of the Divine icon:
+  # "_lg" sits inline next to the big 48px numbers on Wealth/Session/Rate,
+  # the small one pairs with the smaller numbers on the Ratio page
+  # alongside the Chaos icon.
+  - platform: file
+    id: icon_divine_lg
+    file: "https://web.poecdn.com/image/Art/2DItems/Currency/CurrencyModValues.png"
+    resize: 44x44
+    type: RGB565
+    transparency: alpha_channel
+  - platform: file
+    id: icon_divine_sm
+    file: "https://web.poecdn.com/image/Art/2DItems/Currency/CurrencyModValues.png"
+    resize: 30x30
+    type: RGB565
+    transparency: alpha_channel
+  - platform: file
+    id: icon_chaos_sm
+    file: "https://web.poecdn.com/image/Art/2DItems/Currency/CurrencyRerollRare.png"
+    resize: 30x30
+    type: RGB565
+    transparency: alpha_channel
+
 touchscreen:
   - platform: ft3168
     id: touch
@@ -168,17 +194,36 @@ touchscreen:
       x_max: 279
       y_min: 0
       y_max: 455
-    # Swipe distance is tracked in on_update (the only trigger that gets
-    # live touch coordinates) into a global, then acted on in on_release
-    # (which fires once with no touch data of its own).
+    # The display is logically rotated 90 degrees (see `rotation: 90`
+    # above) to go landscape, but the touch controller still reports raw
+    # coordinates in the panel's native portrait orientation -- this
+    # transform remaps raw touch into the rotated logical space so touch
+    # position lines up with what's drawn on screen. swap_xy/mirror_y is
+    # the standard combination for a 90-degree rotation, but this is
+    # UNVERIFIED against real hardware; if touch feels offset or mirrored
+    # once landscape is live, try toggling mirror_x/mirror_y here first.
+    transform:
+      swap_xy: true
+      mirror_x: false
+      mirror_y: true
+    # Swipe distance (both axes) is tracked in on_update (the only trigger
+    # that gets live touch coordinates) into globals, then acted on in
+    # on_release (which fires once with no touch data of its own).
+    # Horizontal swipe = page navigation; vertical downward swipe = force
+    # a refresh (pull-to-refresh), replacing the old corner button, which
+    # was both hard to hit and showed a glyph the default LVGL font
+    # doesn't have.
     on_update:
       - lambda: |-
           if (touches.empty()) return;
           id(swipe_dx) = (int) touches[0].x - (int) touches[0].x_org;
+          id(swipe_dy) = (int) touches[0].y - (int) touches[0].y_org;
     on_release:
       - if:
           condition:
-            lambda: "return abs(id(swipe_dx)) >= atoi(\"${swipe_threshold_px}\");"
+            lambda: |-
+              return abs(id(swipe_dx)) >= atoi("${swipe_threshold_px}") &&
+                     abs(id(swipe_dx)) > abs(id(swipe_dy));
           then:
             - if:
                 condition:
@@ -191,13 +236,61 @@ touchscreen:
                   - lvgl.page.previous:
                       animation: OUT_RIGHT
                       time: 200ms
-      - lambda: "id(swipe_dx) = 0;"
+          else:
+            - if:
+                condition:
+                  lambda: |-
+                    return id(swipe_dy) >= atoi("${swipe_threshold_px}") &&
+                           abs(id(swipe_dy)) > abs(id(swipe_dx));
+                then:
+                  - homeassistant.service:
+                      service: homeassistant.update_entity
+                      data:
+                        entity_id: ${refresh_target_entity}
+                  # Reset the elapsed counter right away rather than
+                  # waiting for the raw string to change -- otherwise a
+                  # manual refresh that finds no new WealthyExile data
+                  # (the common case) looks completely inert: spinner
+                  # spins, but "Last sync" doesn't move at all.
+                  - lambda: |-
+                      id(elapsed_since_sync) = 0;
+                  - lvgl.widget.show: refresh_spinner
+                  - delay: 1200ms
+                  - lvgl.widget.hide: refresh_spinner
+      - lambda: |-
+          id(swipe_dx) = 0;
+          id(swipe_dy) = 0;
 
 globals:
   - id: swipe_dx
     type: int
     restore_value: false
     initial_value: "0"
+  - id: swipe_dy
+    type: int
+    restore_value: false
+    initial_value: "0"
+  # Last-sync display is relative ("12s", "4m", "> 10m"), not a clock
+  # timestamp -- a fixed HH:MM barely changes within a play session and
+  # is useless for confirming a refresh actually did something. Rather
+  # than parsing WealthyExile's ISO8601 string against wall-clock time
+  # (needs its own `time:` component plus timezone handling), this just
+  # counts seconds since the raw string last *changed*. Simpler and
+  # avoids a timezone dependency, at the cost of one inaccuracy: right
+  # after a reboot/reflash it starts ticking from 0 even if the cached
+  # value is actually older -- self-corrects at the next real sync.
+  - id: elapsed_since_sync
+    type: int
+    restore_value: false
+    initial_value: "0"
+  - id: last_sync_raw
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: last_sync_display
+    type: std::string
+    restore_value: false
+    initial_value: '"Last sync --"'
 
 # --- Data pulled from Home Assistant (the wealthyexile integration) --------
 
@@ -209,7 +302,7 @@ sensor:
     on_value:
       - lvgl.label.update:
           id: lbl_total_value
-          text: !lambda 'return str_sprintf("%.1f", x);'
+          text: !lambda 'return std::isnan(x) ? "--" : str_sprintf("%.1f", x);'
 
   - platform: homeassistant
     id: ha_divines_per_hour
@@ -217,8 +310,11 @@ sensor:
     internal: true
     on_value:
       - lvgl.label.update:
-          id: lbl_divines_per_hour
-          text: !lambda 'return str_sprintf("%.2f Divine/h", x);'
+          id: lbl_rate_value
+          text: !lambda 'return std::isnan(x) ? "--" : str_sprintf("%+.2f", x);'
+          text_color: !lambda |-
+            if (std::isnan(x)) return lv_color_hex(0x888888);
+            return x >= 0 ? lv_color_hex(0x4CAF50) : lv_color_hex(0xFF5252);
 
   - platform: homeassistant
     id: ha_divine_price
@@ -226,8 +322,8 @@ sensor:
     internal: true
     on_value:
       - lvgl.label.update:
-          id: lbl_divine_price
-          text: !lambda 'return str_sprintf("1 Divine = %.0f Chaos", x);'
+          id: lbl_ratio_value
+          text: !lambda 'return std::isnan(x) ? "--" : str_sprintf("%.0f", x);'
 
   - platform: homeassistant
     id: ha_session_gain
@@ -235,229 +331,232 @@ sensor:
     internal: true
     on_value:
       - lvgl.label.update:
-          id: lbl_session_gain
-          text: !lambda 'return str_sprintf("%+.1f Divine diese Sitzung", x);'
-
-  - platform: homeassistant
-    id: ha_top_item_1_value
-    entity_id: ${top_item_1_entity}
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_1_value, text: !lambda 'return str_sprintf("%.1f", x);'}
-  - platform: homeassistant
-    id: ha_top_item_2_value
-    entity_id: ${top_item_2_entity}
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_2_value, text: !lambda 'return str_sprintf("%.1f", x);'}
-  - platform: homeassistant
-    id: ha_top_item_3_value
-    entity_id: ${top_item_3_entity}
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_3_value, text: !lambda 'return str_sprintf("%.1f", x);'}
-  - platform: homeassistant
-    id: ha_top_item_4_value
-    entity_id: ${top_item_4_entity}
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_4_value, text: !lambda 'return str_sprintf("%.1f", x);'}
-  - platform: homeassistant
-    id: ha_top_item_5_value
-    entity_id: ${top_item_5_entity}
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_5_value, text: !lambda 'return str_sprintf("%.1f", x);'}
-  - platform: homeassistant
-    id: ha_top_item_6_value
-    entity_id: ${top_item_6_entity}
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_6_value, text: !lambda 'return str_sprintf("%.1f", x);'}
-  - platform: homeassistant
-    id: ha_top_item_7_value
-    entity_id: ${top_item_7_entity}
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_7_value, text: !lambda 'return str_sprintf("%.1f", x);'}
-  - platform: homeassistant
-    id: ha_top_item_8_value
-    entity_id: ${top_item_8_entity}
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_8_value, text: !lambda 'return str_sprintf("%.1f", x);'}
+          id: lbl_session_value
+          text: !lambda 'return std::isnan(x) ? "--" : str_sprintf("%+.1f", x);'
+          text_color: !lambda |-
+            if (std::isnan(x)) return lv_color_hex(0x888888);
+            return x >= 0 ? lv_color_hex(0x4CAF50) : lv_color_hex(0xFF5252);
 
 text_sensor:
+  # WealthyExile's own "last synced" timestamp (when the game itself last
+  # pushed fresh data to WealthyExile) -- not the same as when this
+  # device last polled HA. Shown on every page so a pull-down-to-refresh
+  # has something visible to check against: if the elapsed counter below
+  # doesn't reset after a refresh, it means WealthyExile genuinely has
+  # nothing newer yet, not that the gesture failed. Only reacts to the
+  # raw ISO8601 string actually *changing* -- see `elapsed_since_sync`.
   - platform: homeassistant
-    id: ha_top_item_1_name
-    entity_id: ${top_item_1_entity}
-    attribute: name
+    id: ha_last_synced
+    entity_id: sensor.wealthyexile_last_synced
     internal: true
     on_value:
-      - lvgl.label.update: {id: lbl_top_1_name, text: !lambda "return x;"}
-  - platform: homeassistant
-    id: ha_top_item_2_name
-    entity_id: ${top_item_2_entity}
-    attribute: name
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_2_name, text: !lambda "return x;"}
-  - platform: homeassistant
-    id: ha_top_item_3_name
-    entity_id: ${top_item_3_entity}
-    attribute: name
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_3_name, text: !lambda "return x;"}
-  - platform: homeassistant
-    id: ha_top_item_4_name
-    entity_id: ${top_item_4_entity}
-    attribute: name
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_4_name, text: !lambda "return x;"}
-  - platform: homeassistant
-    id: ha_top_item_5_name
-    entity_id: ${top_item_5_entity}
-    attribute: name
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_5_name, text: !lambda "return x;"}
-  - platform: homeassistant
-    id: ha_top_item_6_name
-    entity_id: ${top_item_6_entity}
-    attribute: name
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_6_name, text: !lambda "return x;"}
-  - platform: homeassistant
-    id: ha_top_item_7_name
-    entity_id: ${top_item_7_entity}
-    attribute: name
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_7_name, text: !lambda "return x;"}
-  - platform: homeassistant
-    id: ha_top_item_8_name
-    entity_id: ${top_item_8_entity}
-    attribute: name
-    internal: true
-    on_value:
-      - lvgl.label.update: {id: lbl_top_8_name, text: !lambda "return x;"}
+      - lambda: |-
+          if (x != id(last_sync_raw)) {
+            id(last_sync_raw) = x;
+            id(elapsed_since_sync) = 0;
+          }
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          int e = ++id(elapsed_since_sync);
+          char buf[24];
+          if (e < 60) {
+            snprintf(buf, sizeof(buf), "Last sync %ds", e);
+          } else if (e < 600) {
+            snprintf(buf, sizeof(buf), "Last sync %dm", e / 60);
+          } else {
+            snprintf(buf, sizeof(buf), "Last sync > 10m");
+          }
+          id(last_sync_display) = std::string(buf);
+      - lvgl.label.update: {id: lbl_last_sync_rate, text: !lambda 'return id(last_sync_display);'}
+      - lvgl.label.update: {id: lbl_last_sync_wealth, text: !lambda 'return id(last_sync_display);'}
+      - lvgl.label.update: {id: lbl_last_sync_session, text: !lambda 'return id(last_sync_display);'}
+      - lvgl.label.update: {id: lbl_last_sync_ratio, text: !lambda 'return id(last_sync_display);'}
 
 # --- Screens -----------------------------------------------------------
 
 lvgl:
+  rotation: 90
   touchscreens:
     - touch
+  # A single spinner on LVGL's top layer (renders above whatever page is
+  # active, so it doesn't need to be duplicated per page). Shown briefly
+  # on every pull-down-to-refresh so the gesture has visible confirmation
+  # even when the underlying values don't change -- see the touchscreen
+  # on_release handler below.
+  top_layer:
+    widgets:
+      - spinner:
+          id: refresh_spinner
+          x: 10
+          y: 10
+          width: 28
+          height: 28
+          spin_time: 1s
+          arc_length: 60deg
+          indicator:
+            arc_color: 0x66CCFF
+          hidden: true
   pages:
-    - id: page_total
+    - id: page_rate
       bg_color: 0x000000
       widgets:
         - label:
-            text: "GESAMTWERT"
+            text: "DIVINES / HOUR"
             text_color: 0x888888
             align: TOP_MID
-            y: 20
-        - label:
-            id: lbl_total_value
-            text: "--"
-            text_font: montserrat_48
-            text_color: 0xFFFFFF
-            align: TOP_MID
-            y: 50
-        - label:
-            text: "Divine"
-            text_color: 0xAAAAAA
-            align: TOP_MID
-            y: 110
-        - label:
-            id: lbl_divines_per_hour
-            text: "-- Divine/h"
-            text_color: 0x66CCFF
-            align: TOP_MID
-            y: 160
-        - label:
-            id: lbl_session_gain
-            text: "-- Divine diese Sitzung"
-            text_color: 0xAAAAAA
-            align: TOP_MID
-            y: 195
-        - label:
-            id: lbl_divine_price
-            text: "1 Divine = -- Chaos"
-            text_color: 0x666666
-            align: TOP_MID
-            y: 230
-        - button:
-            x: 220
-            y: 400
-            width: 50
-            height: 40
+            y: 30
+        - obj:
+            width: 260
+            height: 60
+            align: CENTER
+            bg_opa: 0%
+            border_width: 0
+            pad_all: 0
+            layout:
+              type: FLEX
+              flex_flow: ROW
+              flex_align_main: CENTER
+              flex_align_cross: CENTER
+              pad_column: 8
             widgets:
               - label:
-                  text: "⟳"
-            on_click:
-              - homeassistant.service:
-                  service: homeassistant.update_entity
-                  data:
-                    entity_id: ${refresh_target_entity}
+                  id: lbl_rate_value
+                  text: "--"
+                  text_font: montserrat_48
+                  text_color: 0x888888
+              - image:
+                  src: icon_divine_lg
+              - label:
+                  text: "/ h"
+                  text_color: 0xAAAAAA
+        - label:
+            id: lbl_last_sync_rate
+            text: "Last sync --"
+            text_font: montserrat_14
+            text_color: 0x555555
+            align: CENTER
+            y: 110
 
-    - id: page_top_items
+    - id: page_wealth
       bg_color: 0x000000
       widgets:
         - label:
-            text: "TOP STACKS"
+            text: "WEALTH"
             text_color: 0x888888
             align: TOP_MID
-            y: 10
+            y: 30
         - obj:
-            x: 10
-            y: 35
             width: 260
-            height: 400
+            height: 60
+            align: CENTER
+            bg_opa: 0%
+            border_width: 0
             pad_all: 0
-            scrollbar_mode: "OFF"
+            layout:
+              type: FLEX
+              flex_flow: ROW
+              flex_align_main: CENTER
+              flex_align_cross: CENTER
+              pad_column: 10
             widgets:
-              # Eight fixed rows, one per top_item_N entity. The HA side
-              # always publishes exactly 8 (empty slots just show "--").
-              - obj:
-                  height: 48
-                  widgets:
-                    - label: {id: lbl_top_1_name, text: "--", x: 0, y: 2, width: 190}
-                    - label: {id: lbl_top_1_value, text: "--", x: 195, y: 2, text_align: RIGHT}
-              - obj:
-                  height: 48
-                  widgets:
-                    - label: {id: lbl_top_2_name, text: "--", x: 0, y: 2, width: 190}
-                    - label: {id: lbl_top_2_value, text: "--", x: 195, y: 2, text_align: RIGHT}
-              - obj:
-                  height: 48
-                  widgets:
-                    - label: {id: lbl_top_3_name, text: "--", x: 0, y: 2, width: 190}
-                    - label: {id: lbl_top_3_value, text: "--", x: 195, y: 2, text_align: RIGHT}
-              - obj:
-                  height: 48
-                  widgets:
-                    - label: {id: lbl_top_4_name, text: "--", x: 0, y: 2, width: 190}
-                    - label: {id: lbl_top_4_value, text: "--", x: 195, y: 2, text_align: RIGHT}
-              - obj:
-                  height: 48
-                  widgets:
-                    - label: {id: lbl_top_5_name, text: "--", x: 0, y: 2, width: 190}
-                    - label: {id: lbl_top_5_value, text: "--", x: 195, y: 2, text_align: RIGHT}
-              - obj:
-                  height: 48
-                  widgets:
-                    - label: {id: lbl_top_6_name, text: "--", x: 0, y: 2, width: 190}
-                    - label: {id: lbl_top_6_value, text: "--", x: 195, y: 2, text_align: RIGHT}
-              - obj:
-                  height: 48
-                  widgets:
-                    - label: {id: lbl_top_7_name, text: "--", x: 0, y: 2, width: 190}
-                    - label: {id: lbl_top_7_value, text: "--", x: 195, y: 2, text_align: RIGHT}
-              - obj:
-                  height: 48
-                  widgets:
-                    - label: {id: lbl_top_8_name, text: "--", x: 0, y: 2, width: 190}
-                    - label: {id: lbl_top_8_value, text: "--", x: 195, y: 2, text_align: RIGHT}
+              - label:
+                  id: lbl_total_value
+                  text: "--"
+                  text_font: montserrat_48
+                  text_color: 0xFFFFFF
+              - image:
+                  src: icon_divine_lg
+        - label:
+            id: lbl_last_sync_wealth
+            text: "Last sync --"
+            text_font: montserrat_14
+            text_color: 0x555555
+            align: CENTER
+            y: 110
+
+    - id: page_session
+      bg_color: 0x000000
+      widgets:
+        - label:
+            text: "THIS SESSION"
+            text_color: 0x888888
+            align: TOP_MID
+            y: 30
+        - obj:
+            width: 260
+            height: 60
+            align: CENTER
+            bg_opa: 0%
+            border_width: 0
+            pad_all: 0
+            layout:
+              type: FLEX
+              flex_flow: ROW
+              flex_align_main: CENTER
+              flex_align_cross: CENTER
+              pad_column: 10
+            widgets:
+              - label:
+                  id: lbl_session_value
+                  text: "--"
+                  text_font: montserrat_48
+                  text_color: 0x888888
+              - image:
+                  src: icon_divine_lg
+        - label:
+            id: lbl_last_sync_session
+            text: "Last sync --"
+            text_font: montserrat_14
+            text_color: 0x555555
+            align: CENTER
+            y: 110
+
+    - id: page_ratio
+      bg_color: 0x000000
+      widgets:
+        - label:
+            text: "EXCHANGE RATE"
+            text_color: 0x888888
+            align: TOP_MID
+            y: 30
+        - obj:
+            width: 320
+            height: 50
+            align: CENTER
+            bg_opa: 0%
+            border_width: 0
+            pad_all: 0
+            layout:
+              type: FLEX
+              flex_flow: ROW
+              flex_align_main: CENTER
+              flex_align_cross: CENTER
+              pad_column: 10
+            widgets:
+              - image:
+                  src: icon_chaos_sm
+              - label:
+                  id: lbl_ratio_value
+                  text: "--"
+                  text_font: montserrat_32
+                  text_color: 0xFFFFFF
+              - label:
+                  text: ":"
+                  text_font: montserrat_32
+                  text_color: 0xAAAAAA
+              - label:
+                  text: "1"
+                  text_font: montserrat_32
+                  text_color: 0xFFFFFF
+              - image:
+                  src: icon_divine_sm
+        - label:
+            id: lbl_last_sync_ratio
+            text: "Last sync --"
+            text_font: montserrat_14
+            text_color: 0x555555
+            align: CENTER
+            y: 110
