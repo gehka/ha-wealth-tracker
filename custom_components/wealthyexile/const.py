@@ -3,16 +3,8 @@ from datetime import timedelta
 
 DOMAIN = "wealthyexile"
 
-CONF_CODE_VERIFIER_NAME = "code_verifier_name"
-CONF_CODE_VERIFIER_VALUE = "code_verifier_value"
 CONF_SESSION_COOKIE_NAME = "session_cookie_name"
 CONF_SESSION_COOKIE_VALUE = "session_cookie_value"
-
-# The code_verifier cookie's *name* looked stable across accounts/leagues
-# in testing -- unlike the session cookie's name, which embeds the current
-# PoE league (e.g. "session-Allflame-1") and changes every league. Used as
-# the config flow's default for that field, not hardcoded/assumed elsewhere.
-DEFAULT_CODE_VERIFIER_NAME = "code_verifier"
 
 STASH_URL = "https://wealthyexile.com/stash?primary=true"
 

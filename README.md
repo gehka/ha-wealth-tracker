@@ -23,7 +23,7 @@ Home Assistant custom integration that polls [WealthyExile](https://wealthyexile
 2. Install "WealthyExile Loot Tracker".
 3. Restart Home Assistant.
 4. Settings → Devices & Services → Add Integration → "WealthyExile".
-5. You'll need two cookies from wealthyexile.com (DevTools → Network tab → any request to `stash?primary=true` → Cookie header): `code_verifier` and a session cookie whose name changes with the current PoE league (e.g. `session-Allflame-1`). The setup form asks for each cookie's name and value separately, since the session cookie's name isn't stable across leagues.
+5. You'll need one cookie from wealthyexile.com (DevTools → Network tab → any request to `stash?primary=true` → Cookie header): the one named `session-<YourLeague>-1`, e.g. `session-Allflame-1`. The setup form asks for its name and value separately, since the name changes with the current PoE league.
 
 ## ESPHome display
 

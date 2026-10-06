@@ -12,8 +12,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import WealthyExileApiClient
 from .calculations import DerivedData, compute_derived
 from .const import (
-    CONF_CODE_VERIFIER_NAME,
-    CONF_CODE_VERIFIER_VALUE,
     CONF_SESSION_COOKIE_NAME,
     CONF_SESSION_COOKIE_VALUE,
     DOMAIN,
@@ -41,8 +39,6 @@ class WealthyExileCoordinator(DataUpdateCoordinator[DerivedData]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=UPDATE_INTERVAL)
         self._client = WealthyExileApiClient(
-            entry.data[CONF_CODE_VERIFIER_NAME],
-            entry.data[CONF_CODE_VERIFIER_VALUE],
             entry.data[CONF_SESSION_COOKIE_NAME],
             entry.data[CONF_SESSION_COOKIE_VALUE],
         )

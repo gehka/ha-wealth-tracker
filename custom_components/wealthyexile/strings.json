@@ -3,12 +3,10 @@
     "step": {
       "user": {
         "title": "Connect to WealthyExile",
-        "description": "Log in at wealthyexile.com/stash, open your browser's DevTools (Network tab), pick a request to `stash?primary=true`, and look at its `cookie` header. You'll see two cookies separated by `; ` — e.g. `code_verifier=d31a6d0f-...` and `session-Allflame-1=eyJhbGci...`. Enter both separately below: the name (the word before `=`) on the left, the value (everything after) on the right. Important: the second cookie's name changes with every new PoE league (e.g. `session-Allflame-1` eventually becomes `session-<NewLeague>-1`) — always enter the current name, not an old one.",
+        "description": "Log in at wealthyexile.com/stash, open your browser's DevTools (Network tab), pick a request to `stash?primary=true`, and look at its `cookie` header. You're looking for the cookie that starts with `session-` — e.g. `session-Allflame-1=eyJhbGci...`. Enter its name (the part before `=`) and value (everything after) below. Important: the name changes with every new PoE league (e.g. `session-Allflame-1` eventually becomes `session-<NewLeague>-1`) — always enter the current name, not an old one.",
         "data": {
-          "code_verifier_name": "Cookie 1 — name",
-          "code_verifier_value": "Cookie 1 — value",
-          "session_cookie_name": "Cookie 2 — name (changes every league!)",
-          "session_cookie_value": "Cookie 2 — value"
+          "session_cookie_name": "Cookie name (changes every league!)",
+          "session_cookie_value": "Cookie value"
         }
       }
     },

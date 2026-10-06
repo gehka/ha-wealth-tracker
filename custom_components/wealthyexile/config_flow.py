@@ -10,22 +10,13 @@ import voluptuous as vol
 from homeassistant import config_entries
 
 from .api import WealthyExileApiClient
-from .const import (
-    CONF_CODE_VERIFIER_NAME,
-    CONF_CODE_VERIFIER_VALUE,
-    CONF_SESSION_COOKIE_NAME,
-    CONF_SESSION_COOKIE_VALUE,
-    DEFAULT_CODE_VERIFIER_NAME,
-    DOMAIN,
-)
+from .const import CONF_SESSION_COOKIE_NAME, CONF_SESSION_COOKIE_VALUE, DOMAIN
 from .parser import WealthyExileParseError
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_CODE_VERIFIER_NAME, default=DEFAULT_CODE_VERIFIER_NAME): str,
-        vol.Required(CONF_CODE_VERIFIER_VALUE): str,
         vol.Required(CONF_SESSION_COOKIE_NAME): str,
         vol.Required(CONF_SESSION_COOKIE_VALUE): str,
     }
@@ -43,17 +34,10 @@ class WealthyExileConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            code_verifier_name = user_input[CONF_CODE_VERIFIER_NAME].strip()
-            code_verifier_value = user_input[CONF_CODE_VERIFIER_VALUE].strip()
             session_cookie_name = user_input[CONF_SESSION_COOKIE_NAME].strip()
             session_cookie_value = user_input[CONF_SESSION_COOKIE_VALUE].strip()
 
-            client = WealthyExileApiClient(
-                code_verifier_name,
-                code_verifier_value,
-                session_cookie_name,
-                session_cookie_value,
-            )
+            client = WealthyExileApiClient(session_cookie_name, session_cookie_value)
 
             try:
                 payload = await client.async_fetch_stash()
@@ -75,8 +59,6 @@ class WealthyExileConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(
                     title=f"WealthyExile ({league})",
                     data={
-                        CONF_CODE_VERIFIER_NAME: code_verifier_name,
-                        CONF_CODE_VERIFIER_VALUE: code_verifier_value,
                         CONF_SESSION_COOKIE_NAME: session_cookie_name,
                         CONF_SESSION_COOKIE_VALUE: session_cookie_value,
                     },

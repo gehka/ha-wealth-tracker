@@ -62,25 +62,20 @@ _BROWSER_LIKE_HEADERS = {
 class WealthyExileApiClient:
     """Reads the current stash state from WealthyExile.
 
-    Takes the two cookies as separate name/value pairs (not one opaque
-    header string) because the session cookie's *name* embeds the current
-    PoE league (e.g. `session-Allflame-1`) and changes every league --
-    asking for name+value separately makes that obvious to whoever is
-    filling in the config flow, instead of silently breaking three months
-    later with no clue why.
+    Only needs the one session cookie. An earlier version also sent a
+    `code_verifier` cookie (present in every real browser request we'd
+    captured, so it seemed required) -- confirmed by testing that the GET
+    this client does works fine without it, so it was dropped. Takes the
+    cookie as a separate name/value pair (not one opaque header string)
+    because its *name* embeds the current PoE league (e.g.
+    `session-Allflame-1`) and changes every league -- asking for name and
+    value separately makes that obvious to whoever is filling in the
+    config flow, instead of silently breaking three months later with no
+    clue why.
     """
 
-    def __init__(
-        self,
-        code_verifier_name: str,
-        code_verifier_value: str,
-        session_cookie_name: str,
-        session_cookie_value: str,
-    ) -> None:
-        self._cookie = (
-            f"{code_verifier_name}={code_verifier_value}; "
-            f"{session_cookie_name}={session_cookie_value}"
-        )
+    def __init__(self, session_cookie_name: str, session_cookie_value: str) -> None:
+        self._cookie = f"{session_cookie_name}={session_cookie_value}"
 
     async def async_fetch_stash(self) -> dict[str, Any]:
         """Return the parsed `{"user": ..., "priceMap": ...}` currently on
