@@ -23,10 +23,12 @@
 #   - Touch calibration below assumes a 1:1 raw-to-pixel mapping with no
 #     axis swap/invert; this is the most common gotcha on these boards and
 #     may need adjusting once touch is live.
-#   - Substitutions below are *placeholder* entity IDs. After the
-#     `wealthyexile` HA integration is set up, check
-#     Developer Tools > States for the real entity IDs and update the
-#     substitutions block to match.
+#   - Substitutions below use the `wealthyexile` integration's fixed,
+#     predictable entity IDs (see custom_components/wealthyexile/sensor.py)
+#     and should work out of the box on any fresh install -- but worth one
+#     quick check under Developer Tools > States after first setup, in
+#     case something else on that HA instance already collided with one of
+#     those IDs.
 #   - Not flashed/tested on real hardware (no device available in the dev
 #     environment this was written in) -- `esphome config` validates
 #     cleanly and a full `esphome compile` was kicked off, but display and
@@ -115,7 +117,12 @@ substitutions:
   # Any entity backed by the wealthyexile coordinator works here -- HA's
   # CoordinatorEntity treats a per-entity update_entity call as a request
   # to refresh the whole shared coordinator, so this doubles as "refresh
-  # everything now".
+  # everything now". Note the integration only *reads* WealthyExile's
+  # current state (see custom_components/wealthyexile/api.py) -- it never
+  # triggers a new stash sync. So this button means "check what
+  # WealthyExile already knows, right now" rather than "sync the game
+  # right now"; the actual sync still has to happen on wealthyexile.com
+  # (or however WealthyExile syncs during a play session).
   refresh_target_entity: sensor.wealthyexile_wealth
   swipe_threshold_px: "40"
 

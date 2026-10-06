@@ -24,17 +24,19 @@ from .parser import WealthyExileParseError
 
 _LOGGER = logging.getLogger(__name__)
 
-# A single WealthyExileParseError is usually just the GET->POST race: our
-# GET learned the current lastSynced, but something else (the user's own
-# browser) synced before our POST landed, so the values we sent are
-# already stale. That's expected occasionally and self-heals on the next
-# poll -- only surface a repair issue if it keeps happening, which more
-# likely means a real redeploy broke NEXT_ACTION_HASH/X_DEPLOYMENT_ID.
+# Don't raise a repair issue on a single blip (a transient network error,
+# WealthyExile being briefly unavailable) -- only once it's been failing
+# for a while, which more likely means something that needs attention
+# (expired cookie, WealthyExile changed their page structure).
 _CONSECUTIVE_FAILURES_BEFORE_REPAIR_ISSUE = 3
 
 
 class WealthyExileCoordinator(DataUpdateCoordinator[DerivedData]):
-    """Polls WealthyExile every UPDATE_INTERVAL and exposes derived data."""
+    """Polls WealthyExile every UPDATE_INTERVAL and exposes derived data.
+
+    Read-only: never triggers a new stash sync, just reads back whatever
+    WealthyExile currently has (see api.py's module docstring for why).
+    """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=UPDATE_INTERVAL)

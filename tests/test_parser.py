@@ -11,7 +11,6 @@ from parser import (  # noqa: E402
     WealthyExileParseError,
     extract_stash_payload,
     extract_stash_payload_from_html,
-    parse_flight_date,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "stash_response.txt"
@@ -55,18 +54,6 @@ def test_extract_stash_payload_truncated_raises():
     truncated = raw_text[: start + 50]
     with pytest.raises(WealthyExileParseError):
         extract_stash_payload(truncated)
-
-
-def test_parse_flight_date_strips_prefix():
-    assert parse_flight_date("$D2026-10-05T12:01:10.000Z") == "2026-10-05T12:01:10.000Z"
-
-
-def test_parse_flight_date_passes_through_plain_strings():
-    assert parse_flight_date("2026-10-05T12:01:10.000Z") == "2026-10-05T12:01:10.000Z"
-
-
-def test_parse_flight_date_none():
-    assert parse_flight_date(None) is None
 
 
 def test_extract_stash_payload_from_html_fixture():

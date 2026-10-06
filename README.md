@@ -13,7 +13,7 @@ Home Assistant custom integration that polls [WealthyExile](https://wealthyexile
 
 ## What it does
 
-- Polls your WealthyExile account every 5 minutes, triggering a real stash sync (same as clicking "Sync" on the website) and reading back the result.
+- Polls your WealthyExile account every 5 minutes and reads back whatever stash state is currently there. It never triggers a new sync itself — syncing stays entirely in your hands, either by clicking "Sync" on wealthyexile.com yourself or however WealthyExile syncs during a play session. This is deliberate: there's exactly one source of truth (your WealthyExile account), and this integration only ever reads from it, so it can never race against or interfere with your own activity on the site, and never hammers WealthyExile with sync requests nobody asked for.
 - Exposes the result as Home Assistant sensors: total value (Divine), Divines/hour, current Divine price, session gain, last-synced timestamp, your 8 most valuable item stacks, and one sensor per stash tab (created dynamically based on your actual account — tab count and names vary per account).
 - Nothing touches the Path of Exile game client directly — no memory reading, no input injection, no overlay.
 
@@ -27,10 +27,8 @@ Home Assistant custom integration that polls [WealthyExile](https://wealthyexile
 
 ## ESPHome display
 
-See `esphome/wealthyexile-display-164.yaml` for the Waveshare ESP32-S3-Touch-AMOLED-1.64 firmware. Copy `esphome/secrets.yaml.example` to `esphome/secrets.yaml` and fill in your Wi-Fi credentials before compiling. The YAML's `substitutions:` block has placeholder entity IDs — update them to match the actual entity IDs Home Assistant assigns after you set up the integration (Developer Tools → States).
+See `esphome/wealthyexile-display-164.yaml` for the Waveshare ESP32-S3-Touch-AMOLED-1.64 firmware. Copy `esphome/secrets.yaml.example` to `esphome/secrets.yaml` and fill in your Wi-Fi credentials before compiling. The YAML's `substitutions:` block already uses this integration's fixed, predictable entity IDs (see `custom_components/wealthyexile/sensor.py`), so it should work out of the box on a fresh install — worth a quick check under Developer Tools → States after setup just in case something else collided with one of those IDs.
 
 ## Known limitations
 
-- WealthyExile's sync-trigger endpoint validates the request against its own server-side state; if something else (e.g. you syncing manually in a browser at the same moment) changes that state between this integration's read and write, one poll can fail. This is expected and self-heals on the next poll — a persistent Home Assistant repair issue only appears after several consecutive failures.
-- The hardcoded `next-action`/`x-deployment-id` values in `custom_components/wealthyexile/const.py` are tied to WealthyExile's current deployment and will go stale whenever they redeploy their site. See the comment in that file for how to refresh them.
 - The ESPHome firmware has been validated with `esphome config`/`esphome compile` but not yet flashed to real hardware.

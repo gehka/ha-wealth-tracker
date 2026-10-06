@@ -1,20 +1,18 @@
-"""HTTP client for WealthyExile's `/stash` page and Server Action endpoint.
+"""HTTP client for WealthyExile's `/stash` page.
 
-Every call does two requests:
-
-1. A plain authenticated GET of the `/stash` page, to learn the account's
-   *current* `lastSynced`/`lastHourlySync` straight from the server (see
-   `parser.extract_stash_payload_from_html` for why this works where a
-   Server Action call alone doesn't).
-2. A POST invoking the sync-trigger Server Action with those exact values,
-   which WealthyExile validates against what it has stored for the account
-   and rejects (`WealthyExileParseError`) if they don't match -- e.g. if
-   something else (the user's own browser) synced in between our GET and
-   POST. That's a real but narrow race window (milliseconds in practice),
-   not an ongoing state-tracking requirement -- this client holds no
-   cross-call state at all, which is deliberate: every call re-learns the
-   current state from scratch, so nothing can "lose the thread" between
-   polls, HA restarts, etc.
+Does a single, plain authenticated GET of the page and reads back whatever
+stash state WealthyExile currently has -- it never triggers a new sync.
+Triggering a sync is a mutating action (it validates against and updates
+WealthyExile's own server-side state) and is deliberately left to the
+user: either by clicking "Sync" on wealthyexile.com themselves, or via
+whatever WealthyExile's own game-session sync behavior is. This client
+only ever reads, which sidesteps a whole class of problems a prior version
+of this integration had to work around: the sync-trigger endpoint's
+`lastSynced`/`lastHourlySync` concurrency check racing against the user's
+own browser, and the hardcoded `next-action`/`x-deployment-id` values
+(needed only for that POST, not for this GET) going stale on every
+WealthyExile redeploy. It also means polling on a schedule never hammers
+WealthyExile with sync requests nobody asked for.
 
 Deliberately does *not* use Home Assistant's shared aiohttp session
 (`async_get_clientsession`): that session keeps a real cookie jar, and in
@@ -33,27 +31,27 @@ from typing import Any
 
 import aiohttp
 
-from .const import (
-    NEXT_ACTION_HASH,
-    NEXT_ROUTER_STATE_TREE,
-    STASH_URL,
-    X_DEPLOYMENT_ID,
-)
-from .parser import extract_stash_payload, extract_stash_payload_from_html
+from .const import STASH_URL
+from .parser import extract_stash_payload_from_html
 
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
 
-# Headers beyond Accept/Cookie/Content-Type that matched a real browser
-# request during testing. Unclear which of these actually matter to
-# WealthyExile/Vercel vs. are just cargo-culted from the capture, but
-# there's no reason to find out the hard way by stripping them.
+# Headers beyond Accept/Cookie that matched a real browser request during
+# testing. Unclear which of these actually matter to WealthyExile/Vercel
+# vs. are just cargo-culted from the capture, but there's no reason to
+# find out the hard way by stripping them.
 _BROWSER_LIKE_HEADERS = {
     "accept-encoding": "gzip, deflate, br, zstd",
     "accept-language": "en-US,en;q=0.6",
     "sec-ch-ua": '"Brave";v="153", "Not_A Brand";v="8", "Chromium";v="153"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"Linux"',
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "none",
+    "sec-fetch-user": "?1",
     "sec-gpc": "1",
+    "upgrade-insecure-requests": "1",
     "user-agent": (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
@@ -62,7 +60,7 @@ _BROWSER_LIKE_HEADERS = {
 
 
 class WealthyExileApiClient:
-    """Fetches a fresh stash sync from WealthyExile.
+    """Reads the current stash state from WealthyExile.
 
     Takes the two cookies as separate name/value pairs (not one opaque
     header string) because the session cookie's *name* embeds the current
@@ -85,61 +83,14 @@ class WealthyExileApiClient:
         )
 
     async def async_fetch_stash(self) -> dict[str, Any]:
-        """GET current state, then POST a sync trigger using it. Returns the
-        parsed `{"user": ..., "priceMap": ...}` from the sync response.
-
-        Opens its own aiohttp session per call rather than reusing Home
-        Assistant's shared one -- see module docstring for why.
+        """Return the parsed `{"user": ..., "priceMap": ...}` currently on
+        WealthyExile. Opens its own aiohttp session per call rather than
+        reusing Home Assistant's shared one -- see module docstring for why.
         """
+        headers = {**_BROWSER_LIKE_HEADERS, "cookie": self._cookie}
         async with aiohttp.ClientSession(cookie_jar=aiohttp.DummyCookieJar()) as session:
-            user = (await self._async_get_current_state(session))["user"]
-            last_synced = user["lastSynced"]
-            last_hourly = user["lastHourlySync"]
-
-            return await self._async_trigger_sync(session, last_synced, last_hourly)
-
-    async def _async_get_current_state(
-        self, session: aiohttp.ClientSession
-    ) -> dict[str, Any]:
-        headers = {
-            **_BROWSER_LIKE_HEADERS,
-            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "cookie": self._cookie,
-            "sec-fetch-dest": "document",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-site": "none",
-            "sec-fetch-user": "?1",
-            "upgrade-insecure-requests": "1",
-        }
-        async with session.get(STASH_URL, headers=headers, timeout=_TIMEOUT) as resp:
-            resp.raise_for_status()
-            html = await resp.text()
+            async with session.get(STASH_URL, headers=headers, timeout=_TIMEOUT) as resp:
+                resp.raise_for_status()
+                html = await resp.text()
 
         return extract_stash_payload_from_html(html)
-
-    async def _async_trigger_sync(
-        self, session: aiohttp.ClientSession, last_synced: str, last_hourly: str
-    ) -> dict[str, Any]:
-        body = f'[1,"{last_synced}","{last_hourly}"]'
-        headers = {
-            **_BROWSER_LIKE_HEADERS,
-            "accept": "text/x-component",
-            "content-type": "text/plain;charset=UTF-8",
-            "cookie": self._cookie,
-            "next-action": NEXT_ACTION_HASH,
-            "next-router-state-tree": NEXT_ROUTER_STATE_TREE,
-            "origin": "https://wealthyexile.com",
-            "priority": "u=1, i",
-            "referer": "https://wealthyexile.com/stash",
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "same-origin",
-            "x-deployment-id": X_DEPLOYMENT_ID,
-        }
-        async with session.post(
-            STASH_URL, headers=headers, data=body, timeout=_TIMEOUT
-        ) as resp:
-            resp.raise_for_status()
-            raw_text = await resp.text()
-
-        return extract_stash_payload(raw_text)

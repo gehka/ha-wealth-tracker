@@ -1,12 +1,14 @@
-"""Parsing helpers for WealthyExile's Next.js Server Action responses.
+"""Parsing helpers for WealthyExile's `/stash` page.
 
-WealthyExile's `/stash` endpoint is not a plain JSON API: it returns a React
-Server Components "Flight" stream, a series of lines shaped like
-`<index>:<payload>`. The stash data we need is embedded as a JSON object
-somewhere in that stream, but *not* at a fixed line index -- that index is
-an internal React component id that can shift between WealthyExile
-deployments. So instead of parsing line-by-line, we locate the payload by
-its distinctive content and extract it with brace-matching.
+The page is a Next.js app: a plain GET of `/stash?primary=true` returns
+full HTML, but the actual stash data isn't in regular markup -- it's
+embedded as a JSON-string-escaped React Server Components "Flight" payload
+inside `<script>self.__next_f.push([N,"..."])</script>` hydration tags.
+The data we need is somewhere in one of those chunks, but *not* at a fixed
+chunk index -- that index is an internal React component id that can
+shift between WealthyExile deployments. So instead of parsing by position,
+we locate the payload by its distinctive content and extract it with
+brace-matching.
 """
 from __future__ import annotations
 
@@ -15,15 +17,14 @@ from typing import Any
 
 _USER_MARKER = '{"user":{"preferredLeague"'
 _ERROR_MARKER = '{"error":"'
-_DATE_PREFIX = "$D"
 _NEXT_F_PUSH_MARKER = "self.__next_f.push(["
 
 
 class WealthyExileParseError(Exception):
     """Raised when the stash payload can't be located or parsed.
 
-    Most likely cause: WealthyExile redeployed and the response shape (or
-    the next-action hash that produced it) changed.
+    Most likely cause: WealthyExile redeployed and changed their page
+    structure, or the session cookie is no longer valid.
     """
 
 
@@ -33,9 +34,7 @@ def extract_stash_payload(raw_text: str) -> dict[str, Any]:
     if start == -1:
         error_message = _extract_server_error(raw_text)
         if error_message is not None:
-            raise WealthyExileParseError(
-                f"WealthyExile declined the sync request: {error_message}"
-            )
+            raise WealthyExileParseError(f"WealthyExile returned an error: {error_message}")
         raise WealthyExileParseError(
             "Could not find the stash data marker in the response. "
             "WealthyExile may have redeployed and changed their response "
@@ -64,17 +63,12 @@ def extract_stash_payload(raw_text: str) -> dict[str, Any]:
 def extract_stash_payload_from_html(html_text: str) -> dict[str, Any]:
     """Extract the stash payload from a plain GET of /stash (full HTML page).
 
-    Next.js embeds the same React Flight data used by the POST/GET RSC
-    endpoints inside `<script>self.__next_f.push([N,"..."])</script>` tags
-    for hydration, but as a JSON-string-escaped literal (every `"` becomes
-    `\\"`). We can't brace-match that directly -- each push() call's second
-    argument is first unescaped as a JSON string (which turns it back into
-    plain RSC-stream text), and *that* is handed to `extract_stash_payload`.
-
-    This is what lets us learn the account's current `lastSynced` /
-    `lastHourlySync` without needing a Server Action call: a plain
-    authenticated GET to `/stash?primary=true` renders the page with the
-    live state already embedded, no prior "known-good" timestamp required.
+    Next.js embeds the page's React Flight data inside
+    `<script>self.__next_f.push([N,"..."])</script>` tags for hydration,
+    but as a JSON-string-escaped literal (every `"` becomes `\\"`). We
+    can't brace-match that directly -- each push() call's second argument
+    is first unescaped as a JSON string (which turns it back into plain
+    Flight-stream text), and *that* is handed to `extract_stash_payload`.
     """
     pos = 0
     while True:
@@ -126,14 +120,10 @@ def _find_matching_quote(text: str, open_quote_index: int) -> int | None:
 def _extract_server_error(raw_text: str) -> str | None:
     """Pull a `{"error": "..."}` message out of the response, if present.
 
-    WealthyExile returns these (still as a 200 OK) when the sync-trigger
-    action's `lastSynced`/`lastHourlySync` arguments don't match what it
-    has stored server-side for the account -- e.g. "Last synced time
-    mismatch. This was likely caused by a sync in a different tab or
-    browser." A vaguer, apparently-generic variant ("Hourly sync just
-    happened 2 years ago.") was seen for malformed/very-stale attempts;
-    exact trigger condition unconfirmed, but both mean the same thing in
-    practice: the values we sent are stale, fetch current state and retry.
+    Defensive fallback for when WealthyExile returns a 200 OK with an
+    error payload instead of the expected page content -- surfaces
+    whatever message they included directly, instead of a generic
+    "couldn't find the data" error.
     """
     start = raw_text.find(_ERROR_MARKER)
     if start == -1:
@@ -176,12 +166,3 @@ def _find_matching_brace(text: str, open_brace_index: int) -> int | None:
             if depth == 0:
                 return i
     return None
-
-
-def parse_flight_date(value: str | None) -> str | None:
-    """Strip the React Flight '$D' date prefix, if present."""
-    if value is None:
-        return None
-    if value.startswith(_DATE_PREFIX):
-        return value[len(_DATE_PREFIX) :]
-    return value

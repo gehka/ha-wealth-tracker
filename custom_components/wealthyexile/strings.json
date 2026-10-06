@@ -14,7 +14,7 @@
     },
     "error": {
       "cannot_connect": "Could not reach WealthyExile. Check your internet connection and try again.",
-      "parse_failed": "Could not read WealthyExile's response — either the cookie is invalid/expired, or WealthyExile updated their site (next-action hash out of date, see const.py)."
+      "parse_failed": "Could not read WealthyExile's response — either the cookie is invalid/expired, or WealthyExile updated their site's page structure."
     },
     "abort": {
       "already_configured": "This account is already configured."
@@ -23,7 +23,7 @@
   "issues": {
     "stash_parse_failed": {
       "title": "WealthyExile response could not be read, repeatedly",
-      "description": "A single failure is normal (e.g. if you synced in a browser at the same moment) and self-heals on the next poll — this message only appears after several consecutive failures. Most likely causes: your stored cookie has expired (set up the integration again with a fresh cookie), or WealthyExile updated their site and the hardcoded `next-action` hash is out of date. In the latter case: open your browser's DevTools on wealthyexile.com/stash, look at a `stash?primary=true` request, and update the `next-action` and `x-deployment-id` headers in `const.py`, then restart Home Assistant."
+      "description": "A single failure is normal (e.g. a brief network hiccup) and self-heals on the next poll — this message only appears after several consecutive failures. Most likely cause: your stored cookie has expired. Set up the integration again with a fresh cookie from wealthyexile.com/stash. If that doesn't help, WealthyExile may have changed their page structure in a way this integration doesn't handle yet."
     }
   }
 }
