@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components" / "wealthyexile"))
 
-from calculations import compute_derived  # noqa: E402
+from calculations import _divines_per_hour, compute_derived  # noqa: E402
 from parser import extract_stash_payload  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "fixtures" / "stash_response.txt"
@@ -52,8 +52,19 @@ def test_tab_summaries_use_latest_tab_value():
 
 def test_divines_per_hour_computed_from_snapshot_history():
     derived = compute_derived(_payload())
-    # Newest usable snapshot (79224.87...) vs the oldest one (6326.67...),
-    # ~2.5 months apart in the fixture -- just check it's a small positive
-    # number per hour, not None, and not something wildly implausible.
+    # Fixture only has two usable (non-zero) snapshots, ~2.5 months apart
+    # -- just check it's a small positive number per hour, not None, and
+    # not something wildly implausible.
     assert derived.divines_per_hour is not None
     assert 0 < derived.divines_per_hour < 1
+
+
+def test_divines_per_hour_has_no_minimum_time_gap():
+    # Two snapshots only 6 minutes apart should still produce a rate --
+    # no 30-minute floor. 60 chaos gained over 0.1h at a 300 chaos/divine
+    # price is 0.2 divine over 0.1h = 2 divine/h.
+    snapshots = [
+        {"value": 360, "createdAt": "$D2026-10-06T20:06:00.000Z"},
+        {"value": 300, "createdAt": "$D2026-10-06T20:00:00.000Z"},
+    ]
+    assert _divines_per_hour(snapshots, divine_price=300) == 2.0

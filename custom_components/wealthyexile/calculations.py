@@ -104,6 +104,14 @@ def _total_value_chaos(user: dict) -> float:
 
 
 def _divines_per_hour(snapshots: list[dict], divine_price: float) -> float | None:
+    """Rate of change between the two most recent snapshots, in divine/hour.
+
+    No minimum time gap between them -- show a number as soon as there
+    are two to compare, same as WealthyExile's own "Hourly" view appears
+    to. A near-zero gap just means a noisier extrapolation, not an
+    invalid one; only an exact-zero (or unparsable) gap is skipped, to
+    avoid a division by zero.
+    """
     if not divine_price:
         return None
 
@@ -121,13 +129,14 @@ def _divines_per_hour(snapshots: list[dict], divine_price: float) -> float | Non
         return None
 
     for older in ordered[1:]:
-        older_ts = _parse_timestamp(older["createdAt"])
+        older_ts = _parse_timestamp(older.get("createdAt"))
         if older_ts is None:
             continue
         hours = (newest_ts - older_ts).total_seconds() / 3600
-        if hours >= 0.5:
-            value_diff_chaos = float(newest["value"]) - float(older["value"])
-            return (value_diff_chaos / divine_price) / hours
+        if hours <= 0:
+            continue
+        value_diff_chaos = float(newest["value"]) - float(older["value"])
+        return (value_diff_chaos / divine_price) / hours
 
     return None
 
