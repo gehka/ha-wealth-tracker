@@ -38,9 +38,9 @@ class DerivedData:
     total_value_divine: float
     divines_per_hour: float | None
     last_synced: str | None
+    session_gain_divine: float | None
     top_items: list[TopItem] = field(default_factory=list)
     tabs: list[TabSummary] = field(default_factory=list)
-    session_gain_divine: float = 0.0
 
 
 def compute_derived(payload: dict[str, Any]) -> DerivedData:
@@ -48,6 +48,7 @@ def compute_derived(payload: dict[str, Any]) -> DerivedData:
     user = payload["user"]
     league = user["preferredLeague"]
     divine_price = _select_divine_price(payload.get("priceMap", []), league)
+    snapshots = user.get("snapshots", [])
 
     total_chaos = _total_value_chaos(user)
     total_divine = total_chaos / divine_price if divine_price else 0.0
@@ -57,7 +58,8 @@ def compute_derived(payload: dict[str, Any]) -> DerivedData:
         divine_price_chaos=divine_price,
         total_value_chaos=total_chaos,
         total_value_divine=total_divine,
-        divines_per_hour=_divines_per_hour(user.get("snapshots", []), divine_price),
+        divines_per_hour=_divines_per_hour(snapshots, divine_price),
+        session_gain_divine=_session_gain_divine(snapshots, divine_price),
         last_synced=_strip_date_prefix(user.get("lastSynced")),
         top_items=_top_items(user.get("tabs", []), divine_price, limit=8),
         tabs=_tab_summaries(user.get("tabs", []), divine_price),
@@ -144,6 +146,49 @@ def _divines_per_hour(snapshots: list[dict], divine_price: float) -> float | Non
         return (float(newest["value"]) / divine_price) / hours
 
     return None
+
+
+_SESSION_GAP_HOURS = 1
+_SESSION_MAX_LOOKBACK = 10
+
+
+def _session_gain_divine(snapshots: list[dict], divine_price: float) -> float | None:
+    """Net change across the current "session", purely from snapshot data.
+
+    A session boundary is a >1h gap between two consecutive snapshots --
+    no boundary found means still playing, a gap means a break happened
+    and syncing resumed. Starting from the newest snapshot, walk
+    backwards summing each snapshot's own value (snapshots are per-window
+    deltas, see `_divines_per_hour`) until hitting such a gap, and stop
+    there (that older snapshot belongs to the *previous* session, not
+    this one). Capped at the 10 most recent snapshots so a long
+    continuous play session (or a very sparse history with no gaps at
+    all) doesn't require scanning unbounded history.
+    """
+    if not divine_price:
+        return None
+
+    ordered = sorted(
+        (s for s in snapshots if s.get("isComplete") and s.get("createdAt")),
+        key=lambda s: _parse_timestamp(s.get("createdAt")) or datetime.min,
+        reverse=True,
+    )[:_SESSION_MAX_LOOKBACK]
+    if not ordered:
+        return None
+
+    session = [ordered[0]]
+    for newer, older in zip(ordered, ordered[1:]):
+        newer_ts = _parse_timestamp(newer.get("createdAt"))
+        older_ts = _parse_timestamp(older.get("createdAt"))
+        if newer_ts is None or older_ts is None:
+            break
+        gap_hours = (newer_ts - older_ts).total_seconds() / 3600
+        if gap_hours > _SESSION_GAP_HOURS:
+            break
+        session.append(older)
+
+    total_chaos = sum(float(s["value"]) for s in session)
+    return total_chaos / divine_price
 
 
 def _top_items(tabs: list[dict], divine_price: float, limit: int) -> list[TopItem]:

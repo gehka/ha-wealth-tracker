@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components" / "wealthyexile"))
 
-from calculations import _divines_per_hour, compute_derived  # noqa: E402
+from calculations import _divines_per_hour, _session_gain_divine, compute_derived  # noqa: E402
 from parser import extract_stash_payload  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "fixtures" / "stash_response.txt"
@@ -73,3 +74,50 @@ def test_divines_per_hour_has_no_minimum_time_gap():
         {"value": 300, "createdAt": "$D2026-10-06T20:00:00.000Z", "isComplete": True},
     ]
     assert _divines_per_hour(snapshots, divine_price=300) == pytest.approx(12.0)
+
+
+def test_session_gain_from_fixture():
+    derived = compute_derived(_payload())
+    # Fixture's two newest snapshots (value=0, value=79224.87...) are
+    # ~2 minutes apart (well under the 1h session-boundary gap), so both
+    # count; the third/oldest snapshot is months older (>1h gap), so it
+    # starts a *previous* session and is excluded.
+    assert derived.session_gain_divine == pytest.approx(79224.87558605643 / 370.8)
+
+
+def test_session_gain_stops_at_gap_over_one_hour():
+    # Mirrors a real WealthyExile history: a cluster of snapshots today,
+    # separated from an older cluster by a 60+ hour gap. Only the values
+    # from the newest snapshot back to (and including) the one right
+    # after the gap should be summed.
+    snapshots = [
+        {"value": 0, "createdAt": "$D2026-10-09T10:20:15.000Z", "isComplete": True},
+        {"value": 1440, "createdAt": "$D2026-10-09T10:17:52.000Z", "isComplete": True},
+        {"value": 1803.5, "createdAt": "$D2026-10-09T09:45:53.000Z", "isComplete": True},
+        {"value": 721.4, "createdAt": "$D2026-10-09T09:42:47.000Z", "isComplete": True},
+        {"value": 0, "createdAt": "$D2026-10-09T09:18:39.000Z", "isComplete": True},
+        # >1h gap here (60.5h) -- everything below belongs to a previous
+        # session and must not be included.
+        {"value": 0, "createdAt": "$D2026-10-06T20:49:05.000Z", "isComplete": True},
+        {"value": 7360, "createdAt": "$D2026-10-06T20:04:23.000Z", "isComplete": True},
+        {"value": -3680, "createdAt": "$D2026-10-06T19:46:19.000Z", "isComplete": True},
+        {"value": 0, "createdAt": "$D2026-10-06T19:00:40.000Z", "isComplete": True},
+    ]
+    # 0 + 1440 + 1803.5 + 721.4 + 0 = 3964.9 chaos
+    assert _session_gain_divine(snapshots, divine_price=360.7) == pytest.approx(3964.9 / 360.7)
+
+
+def test_session_gain_caps_lookback_at_ten_snapshots():
+    # 12 snapshots, each 10 minutes apart (no gap anywhere near 1h), each
+    # worth 1 chaos. Without a cap this would sum all 12; capped at 10,
+    # only the 10 most recent (value=1 each) should count.
+    base = datetime(2026, 10, 9, 8, 0, 0)
+    snapshots = [
+        {
+            "value": 1,
+            "createdAt": "$D" + (base + timedelta(minutes=10 * i)).isoformat() + "Z",
+            "isComplete": True,
+        }
+        for i in range(12)
+    ]
+    assert _session_gain_divine(snapshots, divine_price=1) == pytest.approx(10.0)

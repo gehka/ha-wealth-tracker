@@ -149,8 +149,9 @@ class SessionGainSensor(_BaseSensor):
         self.entity_id = "sensor.wealthyexile_session_gain"
 
     @property
-    def native_value(self) -> float:
-        return round(self._data.session_gain_divine, 2)
+    def native_value(self) -> float | None:
+        value = self._data.session_gain_divine
+        return round(value, 2) if value is not None else None
 
 
 class LastSyncedSensor(_BaseSensor):

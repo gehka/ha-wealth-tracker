@@ -42,10 +42,6 @@ class WealthyExileCoordinator(DataUpdateCoordinator[DerivedData]):
             entry.data[CONF_SESSION_COOKIE_NAME],
             entry.data[CONF_SESSION_COOKIE_VALUE],
         )
-        # Baseline for the "session gain" sensor: the total value at the
-        # first successful poll after HA (re)started. Not a true gaming
-        # "session" boundary, just a practical proxy for one.
-        self._session_baseline_divine: float | None = None
         self._consecutive_parse_failures = 0
 
     async def _async_update_data(self) -> DerivedData:
@@ -69,10 +65,4 @@ class WealthyExileCoordinator(DataUpdateCoordinator[DerivedData]):
         self._consecutive_parse_failures = 0
         ir.async_delete_issue(self.hass, DOMAIN, ISSUE_PARSE_FAILED)
 
-        derived = compute_derived(payload)
-
-        if self._session_baseline_divine is None:
-            self._session_baseline_divine = derived.total_value_divine
-        derived.session_gain_divine = derived.total_value_divine - self._session_baseline_divine
-
-        return derived
+        return compute_derived(payload)
