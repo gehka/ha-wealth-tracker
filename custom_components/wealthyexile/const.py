@@ -8,7 +8,16 @@ CONF_SESSION_COOKIE_VALUE = "session_cookie_value"
 
 STASH_URL = "https://wealthyexile.com/stash?primary=true"
 
-UPDATE_INTERVAL = timedelta(minutes=5)
+# Pre-fills the config flow's cookie-name field. WealthyExile names its
+# session cookie "session-<League>-<N>" -- tied to the currently active
+# PoE league, not to any particular account, so this is a genuinely
+# useful default for *any* user setting this up while Allflame is
+# current, not just a hack for one install. Goes stale whenever a new
+# league starts; update it then (the field stays freely editable in the
+# meantime, so a stale default here is an inconvenience, not a bug).
+DEFAULT_SESSION_COOKIE_NAME = "session-Allflame-1"
+
+UPDATE_INTERVAL = timedelta(minutes=1)
 
 ISSUE_PARSE_FAILED = "stash_parse_failed"
 

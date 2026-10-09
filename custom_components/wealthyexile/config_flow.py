@@ -10,14 +10,19 @@ import voluptuous as vol
 from homeassistant import config_entries
 
 from .api import WealthyExileApiClient
-from .const import CONF_SESSION_COOKIE_NAME, CONF_SESSION_COOKIE_VALUE, DOMAIN
+from .const import (
+    CONF_SESSION_COOKIE_NAME,
+    CONF_SESSION_COOKIE_VALUE,
+    DEFAULT_SESSION_COOKIE_NAME,
+    DOMAIN,
+)
 from .parser import WealthyExileParseError
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_SESSION_COOKIE_NAME): str,
+        vol.Required(CONF_SESSION_COOKIE_NAME, default=DEFAULT_SESSION_COOKIE_NAME): str,
         vol.Required(CONF_SESSION_COOKIE_VALUE): str,
     }
 )
