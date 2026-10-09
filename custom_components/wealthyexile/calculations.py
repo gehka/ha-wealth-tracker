@@ -104,19 +104,25 @@ def _total_value_chaos(user: dict) -> float:
 
 
 def _divines_per_hour(snapshots: list[dict], divine_price: float) -> float | None:
-    """Rate of change between the two most recent snapshots, in divine/hour.
+    """Rate of change from the newest snapshot's own value and duration.
 
-    No minimum time gap between them -- show a number as soon as there
-    are two to compare, same as WealthyExile's own "Hourly" view appears
-    to. A near-zero gap just means a noisier extrapolation, not an
-    invalid one; only an exact-zero (or unparsable) gap is skipped, to
-    avoid a division by zero.
+    Confirmed against a live payload and WealthyExile's own Snapshot
+    detail card (Start/End/Duration/Revenue/Cost/Net): a snapshot's
+    `value` is NOT a cumulative stash total, it's the net chaos change
+    *within that one snapshot's own window* -- the span from the
+    previous snapshot's createdAt to this one's createdAt. So the rate
+    is just this snapshot's value over that one duration, not a diff
+    between two snapshots' values (they're already deltas, not totals;
+    diffing two deltas was the bug in the previous version of this
+    function). Zero is a legitimate value here ("no change"), not a
+    sign of an incomplete snapshot -- `isComplete` is the real gate for
+    that.
     """
     if not divine_price:
         return None
 
     ordered = sorted(
-        (s for s in snapshots if s.get("value")),
+        (s for s in snapshots if s.get("isComplete") and s.get("createdAt")),
         key=lambda s: _parse_timestamp(s.get("createdAt")) or datetime.min,
         reverse=True,
     )
@@ -135,8 +141,7 @@ def _divines_per_hour(snapshots: list[dict], divine_price: float) -> float | Non
         hours = (newest_ts - older_ts).total_seconds() / 3600
         if hours <= 0:
             continue
-        value_diff_chaos = float(newest["value"]) - float(older["value"])
-        return (value_diff_chaos / divine_price) / hours
+        return (float(newest["value"]) / divine_price) / hours
 
     return None
 

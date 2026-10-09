@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components" / "wealthyexile"))
 
 from calculations import _divines_per_hour, compute_derived  # noqa: E402
@@ -50,21 +52,24 @@ def test_tab_summaries_use_latest_tab_value():
     assert currency_tab.color == "dddddd"
 
 
-def test_divines_per_hour_computed_from_snapshot_history():
+def test_divines_per_hour_uses_newest_snapshots_own_value():
     derived = compute_derived(_payload())
-    # Fixture only has two usable (non-zero) snapshots, ~2.5 months apart
-    # -- just check it's a small positive number per hour, not None, and
-    # not something wildly implausible.
-    assert derived.divines_per_hour is not None
-    assert 0 < derived.divines_per_hour < 1
+    # Fixture's newest snapshot has value=0 -- a legitimate "no change"
+    # reading (isComplete=true), not a placeholder to skip. The rate is
+    # that snapshot's own value over its own window, so 0 in, 0 out,
+    # regardless of how long the window was.
+    assert derived.divines_per_hour == 0.0
 
 
 def test_divines_per_hour_has_no_minimum_time_gap():
     # Two snapshots only 6 minutes apart should still produce a rate --
-    # no 30-minute floor. 60 chaos gained over 0.1h at a 300 chaos/divine
-    # price is 0.2 divine over 0.1h = 2 divine/h.
+    # no 30-minute floor. The rate is the newest snapshot's own value
+    # (360 chaos = 1.2 divine at 300 chaos/divine) over its own window
+    # (6 min = 0.1h): 1.2 / 0.1 = 12 divine/h. Not a diff against the
+    # older snapshot's value -- snapshot values are already per-window
+    # deltas, not cumulative totals.
     snapshots = [
-        {"value": 360, "createdAt": "$D2026-10-06T20:06:00.000Z"},
-        {"value": 300, "createdAt": "$D2026-10-06T20:00:00.000Z"},
+        {"value": 360, "createdAt": "$D2026-10-06T20:06:00.000Z", "isComplete": True},
+        {"value": 300, "createdAt": "$D2026-10-06T20:00:00.000Z", "isComplete": True},
     ]
-    assert _divines_per_hour(snapshots, divine_price=300) == 2.0
+    assert _divines_per_hour(snapshots, divine_price=300) == pytest.approx(12.0)
